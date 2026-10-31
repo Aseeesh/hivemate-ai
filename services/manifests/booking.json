@@ -1,0 +1,14 @@
+{
+  "pluginId": "booking",
+  "name": "Booking & Scheduling",
+  "version": "0.1.0",
+  "category": "operations",
+  "description": "Checks availability and manages appointments (NZ timezone aware). Planned for Phase 3.",
+  "permissions": ["calendar.read", "calendar.write", "customer.write"],
+  "events": ["booking.requested"],
+  "actions": ["check_availability", "create_booking"],
+  "configurationSchema": {
+    "timezone": { "type": "string", "default": "Pacific/Auckland" },
+    "slotMinutes": { "type": "number", "default": 60 }
+  }
+}

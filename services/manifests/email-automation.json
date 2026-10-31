@@ -1,0 +1,18 @@
+{
+  "pluginId": "email-automation",
+  "name": "Email Automation",
+  "version": "1.0.0",
+  "category": "communication",
+  "description": "Classifies inbound email and drafts replies grounded in the business knowledge base.",
+  "permissions": ["email.read", "email.draft", "email.send", "knowledge.read"],
+  "events": ["email.received"],
+  "actions": ["classify_email", "generate_reply", "send_reply"],
+  "configurationSchema": {
+    "approvalRequired": { "type": "boolean", "default": true },
+    "autoReplyCategories": { "type": "array", "default": ["faq"] },
+    "confidenceThreshold": { "type": "number", "default": 0.8 },
+    "knowledgeBaseId": { "type": "string", "default": "" },
+    "businessTone": { "type": "string", "default": "friendly, concise, New Zealand English" },
+    "sendFrom": { "type": "string", "default": "" }
+  }
+}
