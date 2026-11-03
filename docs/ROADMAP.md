@@ -7,7 +7,7 @@
 - [x] Document upload (presigned POST, SigV4), list, delete, KB sync endpoints
 - [ ] Auto-sync KB on upload (S3 event -> debounced ingestion); Document Analysis plugin (Textract + Bedrock)
 - [ ] AI evaluation suite: golden questions per tenant, check grounding, no cross-tenant leakage, no invented facts
-- [ ] Next.js dashboard (Cognito SRP login, plugin catalog, approval queue)
+- [x] Next.js dashboard (Cognito SRP login + signup confirm, plugin catalog/config, documents, inbox approval queue, audit)
 - [ ] Phase 5: SES inbound + send, website chat (WebSocket/API GW), WhatsApp via End User Messaging Social (check region)
 - [ ] Booking plugin + Step Functions workflow
 - [ ] Phase 6: CloudWatch dashboard, X-Ray, per-tenant usage metering, load tests, CI deploy via OIDC role

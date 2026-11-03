@@ -112,9 +112,16 @@ export class ApiStack extends cdk.Stack {
       },
       defaultAuthorizer: authorizer,
     });
+    // Browser preflight carries no token; without this the JWT authorizer rejects it with 401.
     api.addRoutes({
       path: '/{proxy+}',
-      methods: [apigwv2.HttpMethod.ANY],
+      methods: [apigwv2.HttpMethod.OPTIONS],
+      integration: new HttpLambdaIntegration('PreflightInt', apiFn),
+      authorizer: new apigwv2.HttpNoneAuthorizer(),
+    });
+    api.addRoutes({
+      path: '/{proxy+}',
+      methods: [apigwv2.HttpMethod.GET, apigwv2.HttpMethod.POST, apigwv2.HttpMethod.PUT, apigwv2.HttpMethod.DELETE, apigwv2.HttpMethod.PATCH],
       integration: new HttpLambdaIntegration('ApiInt', apiFn),
     });
 

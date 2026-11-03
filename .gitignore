@@ -5,3 +5,6 @@ __pycache__/
 .venv/
 .env*
 .next/
+outputs.json
+tsconfig.tsbuildinfo
+!.env.example

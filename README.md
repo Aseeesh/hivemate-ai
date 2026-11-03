@@ -48,6 +48,16 @@ Default model: `apac.amazon.nova-lite-v1:0` (cheap; change in `infra/cdk.json`).
 
 See `docs/ROADMAP.md` for what is next.
 
+## Dashboard
+
+```bash
+cd web && npm install
+cp .env.example .env.local   # fill from infra/outputs.json
+npm run dev                  # http://localhost:3000
+```
+
+Sign up (a confirmation code is emailed), then use Inbox, Plugins, Documents and Audit. API and S3 CORS allow `http://localhost:3000` only.
+
 ## CI/CD
 
 `.github/workflows/ci.yml`: tests + `cdk synth` on every PR; on push to `main` it assumes an AWS role through GitHub OIDC

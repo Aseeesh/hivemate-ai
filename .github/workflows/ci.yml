@@ -26,6 +26,8 @@ jobs:
         working-directory: infra
       - run: npx tsc --noEmit && npx cdk synth --quiet -c alertEmail=ci@example.com
         working-directory: infra
+      - run: npm ci && npm run typecheck && npm run build
+        working-directory: web
 
   deploy:
     needs: test

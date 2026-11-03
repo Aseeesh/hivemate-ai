@@ -1,0 +1,25 @@
+import { idToken } from './auth';
+
+export class ApiError extends Error {
+  constructor(public status: number, message: string) { super(message); }
+}
+
+export async function api<T = unknown>(method: string, path: string, body?: unknown): Promise<T> {
+  const token = await idToken();
+  if (!token) throw new ApiError(401, 'Signed out');
+  const res = await fetch(process.env.NEXT_PUBLIC_API_URL + path, {
+    method,
+    headers: { authorization: `Bearer ${token}`, ...(body ? { 'content-type': 'application/json' } : {}) },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new ApiError(res.status, (data as { error?: string }).error ?? `Request failed (${res.status})`);
+  return data as T;
+}
+
+export type Me = { user: { id: string; email: string; role: string }; tenant: { name: string; tenantId: string; currency: string; timezone: string } };
+export type Plugin = { pluginId: string; name: string; version: string; category: string; description: string; permissions: string[]; events: string[]; installed: boolean; config?: Record<string, unknown>; configurationSchema: Record<string, { type: string; default: unknown }> };
+export type Message = { SK: string; from: string; subject: string; body: string; category: string; confidence: number; draftReply: string; status: string };
+export type Doc = { name: string; size: number; modified: string };
+export type Docs = { documents: Doc[]; lastSync: { status: string; startedAt: string } | null };
+export type Audit = { SK: string; actor: string; action: string; at: number; detail: Record<string, unknown> };

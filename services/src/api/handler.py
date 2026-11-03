@@ -21,6 +21,8 @@ def _resp(status: int, body) -> dict:
 def handler(event, _context):
     method = event["requestContext"]["http"]["method"]
     path = event["rawPath"]
+    if method == "OPTIONS":  # CORS preflight: API Gateway adds the CORS headers
+        return {"statusCode": 204}
     try:
         ctx = from_event(event)
         body = json.loads(event["body"]) if event.get("body") else {}
