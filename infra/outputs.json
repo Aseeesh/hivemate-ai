@@ -9,12 +9,16 @@
     "ExportsOutputRefTableCD117FA1D18A8047": "hivemate-dev-data-TableCD117FA1-BKVY20BA6VRQ",
     "ExportsOutputRefDocsBucketECEA003FBE2AA417": "hivemate-dev-data-docsbucketecea003f-4yatirrim7l5",
     "ExportsOutputFnGetAttDocsBucketECEA003FArn8A043E5D": "arn:aws:s3:::hivemate-dev-data-docsbucketecea003f-4yatirrim7l5",
-    "ExportsOutputFnGetAttTableCD117FA1ArnE2C8C204": "arn:aws:dynamodb:ap-southeast-2:520891536070:table/hivemate-dev-data-TableCD117FA1-BKVY20BA6VRQ",
     "ExportsOutputFnGetAttDataKey17AFBB84ArnCE2A1BC6": "arn:aws:kms:ap-southeast-2:520891536070:key/c469b9ff-5cd5-4243-865e-c5292f85e799",
+    "ExportsOutputFnGetAttTableCD117FA1ArnE2C8C204": "arn:aws:dynamodb:ap-southeast-2:520891536070:table/hivemate-dev-data-TableCD117FA1-BKVY20BA6VRQ",
     "DocsBucketName": "hivemate-dev-data-docsbucketecea003f-4yatirrim7l5"
   },
   "hivemate-dev-ai": {
     "ExportsOutputFnGetAttGuardrailGuardrailId78EA463E": "84z5fvy9s62l",
+    "KnowledgeBaseId": "0SZYBKFN7U",
+    "ExportsOutputFnGetAttKnowledgeBaseKnowledgeBaseArn47097C46": "arn:aws:bedrock:ap-southeast-2:520891536070:knowledge-base/0SZYBKFN7U",
+    "ExportsOutputFnGetAttKnowledgeBaseKnowledgeBaseIdFC83E473": "0SZYBKFN7U",
+    "ExportsOutputFnGetAttDocsSourceDataSourceIdCFABF602": "MLFO28E59S",
     "ExportsOutputFnGetAttGuardrailV1Version4D4E0A10": "1"
   },
   "hivemate-dev-auth": {

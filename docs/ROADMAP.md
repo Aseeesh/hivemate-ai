@@ -2,9 +2,11 @@
 
 - [x] Phase 1-3 core: CDK stacks, Cognito, tenant creation, plugin registry/manifests, config validation, audit
 - [x] Email Automation worker: EventBridge -> SQS/DLQ -> Bedrock + Guardrail -> approval gate
-- [ ] Deploy `dev`, enable Bedrock model access, smoke test with curl
-- [ ] Phase 4 RAG: Bedrock Knowledge Base (S3 docs bucket + S3 Vectors or Aurora pgvector), ingestion on upload, `tenantId` metadata filter
-- [ ] Phase 4: presigned-URL document upload endpoint (`<tenantId>/` prefix), Document Analysis plugin (Textract + Bedrock)
+- [x] Deploy `dev` to ap-southeast-2, smoke test end to end
+- [x] Phase 4 RAG: Bedrock Knowledge Base on S3 Vectors, per-tenant `tenantId` metadata filter, verified with two tenants
+- [x] Document upload (presigned POST, SigV4), list, delete, KB sync endpoints
+- [ ] Auto-sync KB on upload (S3 event -> debounced ingestion); Document Analysis plugin (Textract + Bedrock)
+- [ ] AI evaluation suite: golden questions per tenant, check grounding, no cross-tenant leakage, no invented facts
 - [ ] Next.js dashboard (Cognito SRP login, plugin catalog, approval queue)
 - [ ] Phase 5: SES inbound + send, website chat (WebSocket/API GW), WhatsApp via End User Messaging Social (check region)
 - [ ] Booking plugin + Step Functions workflow

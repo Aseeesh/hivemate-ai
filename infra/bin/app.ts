@@ -29,6 +29,9 @@ const api = new ApiStack(app, `${prefix}-api`, {
   emailQueue: events.emailQueue,
   guardrailId: ai.guardrailId,
   guardrailVersion: ai.guardrailVersion,
+  knowledgeBaseId: ai.knowledgeBaseId,
+  knowledgeBaseArn: ai.knowledgeBaseArn,
+  dataSourceId: ai.dataSourceId,
 });
 new CostStack(app, `${prefix}-cost`, { env });
 

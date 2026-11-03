@@ -24,6 +24,9 @@ interface ApiStackProps extends cdk.StackProps {
   emailQueue: sqs.IQueue;
   guardrailId: string;
   guardrailVersion: string;
+  knowledgeBaseId: string;
+  knowledgeBaseArn: string;
+  dataSourceId: string;
 }
 
 export class ApiStack extends cdk.Stack {
@@ -45,6 +48,8 @@ export class ApiStack extends cdk.Stack {
         EVENT_BUS: props.bus.eventBusName,
         MANIFEST_DIR: '/var/task/manifests',
         POWERTOOLS_SERVICE_NAME: 'hivemate',
+        KNOWLEDGE_BASE_ID: props.knowledgeBaseId,
+        DATA_SOURCE_ID: props.dataSourceId,
       },
     };
 
@@ -57,6 +62,10 @@ export class ApiStack extends cdk.Stack {
     props.table.grantReadWriteData(apiFn);
     props.bus.grantPutEventsTo(apiFn);
     props.docsBucket.grantReadWrite(apiFn); // prefix scoping is enforced in code (tenant prefix)
+    apiFn.addToRolePolicy(new iam.PolicyStatement({
+      actions: ['bedrock:StartIngestionJob', 'bedrock:ListIngestionJobs', 'bedrock:GetIngestionJob'],
+      resources: [props.knowledgeBaseArn],
+    }));
 
     // ---- Email Automation plugin worker: SQS -> retrieve -> Bedrock -> approval gate ----
     const emailFn = new lambda.Function(this, 'EmailPluginFn', {
@@ -82,7 +91,7 @@ export class ApiStack extends cdk.Stack {
     }));
     emailFn.addToRolePolicy(new iam.PolicyStatement({
       actions: ['bedrock:Retrieve'],
-      resources: [`arn:aws:bedrock:${this.region}:${this.account}:knowledge-base/*`],
+      resources: [props.knowledgeBaseArn],
     }));
     emailFn.addEventSource(new SqsEventSource(props.emailQueue, {
       batchSize: 5,

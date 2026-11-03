@@ -27,3 +27,12 @@ def test_unknown_key_rejected():
 def test_bool_is_not_a_number():
     with pytest.raises(ValueError):
         plugins.validate_config(plugins.registry()["email-automation"], {"confidenceThreshold": True})
+
+
+def test_document_names_cannot_escape_tenant_prefix():
+    sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+    from src.api import documents
+    assert documents.safe_name("../../tenants/other/docs/secret.pdf") == "secret.pdf"
+    assert documents.safe_name("my faq (v2).txt") == "my_faq__v2_.txt"
+    with pytest.raises(ValueError):
+        documents.safe_name("malware.exe")

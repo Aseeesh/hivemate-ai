@@ -10,7 +10,7 @@ Client ─► API Gateway (HTTP, Cognito JWT) ─► ApiFn ─► DynamoDB (sing
                                                └─► EventBridge bus ─► rule(email.received) ─► SQS (+DLQ)
                                                                                           │
                                        Email plugin Lambda ◄──────────────────────────────┘
-                                         ├─ Bedrock Knowledge Base Retrieve (tenant-filtered)   [Phase 4]
+                                         ├─ Bedrock Knowledge Base Retrieve (tenant-filtered)   
                                          ├─ Bedrock Converse + Guardrail (PII, prompt attack)
                                          └─ approval gate ─► MSG# record + AUDIT# trail
 ```
@@ -20,7 +20,7 @@ Client ─► API Gateway (HTTP, Cognito JWT) ─► ApiFn ─► DynamoDB (sing
 | `data` | KMS key, DynamoDB (PITR, CMK), S3 docs bucket |
 | `auth` | Cognito pool; post-confirmation Lambda creates tenant + admin |
 | `events` | EventBridge bus + archive, SQS + DLQ + alarm |
-| `ai` | Bedrock Guardrail |
+| `ai` | Bedrock Guardrail, Knowledge Base (Titan Embeddings v2, S3 Vectors store, shared, filtered by `tenantId`) |
 | `api` | HTTP API, control-plane Lambda, email plugin worker |
 | `cost` | AWS Budget with 50/80/100% email alerts |
 
@@ -43,6 +43,7 @@ Default model: `apac.amazon.nova-lite-v1:0` (cheap; change in `infra/cdk.json`).
 ## API
 
 `GET /me` · `GET /plugins` · `PUT|DELETE /plugins/{id}` (admin) · `POST /plugins/email-automation/ingest` ·
+`GET|POST /documents` (admin to write) · `DELETE /documents/{name}` · `POST /documents/sync` ·
 `GET /messages` · `POST /messages/{id}/approve|reject` · `GET /audit` (admin)
 
 See `docs/ROADMAP.md` for what is next.

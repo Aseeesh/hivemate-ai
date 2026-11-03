@@ -7,6 +7,7 @@ import uuid
 
 import boto3
 
+from src.api import documents
 from src.common import db, plugins
 from src.common.context import Forbidden, from_event
 
@@ -60,7 +61,8 @@ def handler(event, _context):
             # from the recipient address via ChannelIndex; here the caller's tenant is used.
             if not db.table().get_item(Key={"PK": ctx.pk, "SK": "PLUGIN#email-automation"}).get("Item"):
                 return _resp(409, {"error": "email-automation plugin not installed"})
-            message_id = uuid.uuid4().hex
+            # Time-prefixed so the MSG# sort key (and GET /messages) is chronological.
+            message_id = f"{int(time.time() * 1000):013d}{uuid.uuid4().hex[:8]}"
             events.put_events(Entries=[{
                 "EventBusName": os.environ["EVENT_BUS"],
                 "Source": "hivemate.channel",
@@ -92,6 +94,28 @@ def handler(event, _context):
             )
             db.audit(ctx.pk, ctx.user_id, f"message.{m.group(2)}", {"messageId": m.group(1)})
             return _resp(200, {"status": new_status})
+
+        if (method, path) == ("GET", "/documents"):
+            return _resp(200, documents.list_documents(ctx))
+
+        if (method, path) == ("POST", "/documents"):
+            ctx.require_admin()
+            out = documents.create_upload(ctx, body["filename"])
+            db.audit(ctx.pk, ctx.user_id, "document.upload_requested", {"key": out["key"]})
+            return _resp(200, out)
+
+        if (method, path) == ("POST", "/documents/sync"):
+            ctx.require_admin()
+            out = documents.start_sync(ctx)
+            db.audit(ctx.pk, ctx.user_id, "documents.sync_started", out)
+            return _resp(202, out)
+
+        m = re.fullmatch(r"/documents/([^/]+)", path)
+        if m and method == "DELETE":
+            ctx.require_admin()
+            documents.delete_document(ctx, m.group(1))
+            db.audit(ctx.pk, ctx.user_id, "document.deleted", {"name": m.group(1)})
+            return _resp(200, {"deleted": m.group(1)})
 
         if (method, path) == ("GET", "/audit"):
             ctx.require_admin()

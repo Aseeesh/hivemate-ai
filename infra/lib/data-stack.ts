@@ -48,7 +48,7 @@ export class DataStack extends cdk.Stack {
       removalPolicy: cdk.RemovalPolicy.DESTROY,
       autoDeleteObjects: true,
       cors: [{
-        allowedMethods: [s3.HttpMethods.PUT, s3.HttpMethods.GET],
+        allowedMethods: [s3.HttpMethods.POST, s3.HttpMethods.PUT, s3.HttpMethods.GET],
         allowedOrigins: ['http://localhost:3000'],
         allowedHeaders: ['*'],
       }],
