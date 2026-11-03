@@ -23,3 +23,8 @@ export type Message = { SK: string; from: string; subject: string; body: string;
 export type Doc = { name: string; size: number; modified: string };
 export type Docs = { documents: Doc[]; lastSync: { status: string; startedAt: string } | null };
 export type Audit = { SK: string; actor: string; action: string; at: number; detail: Record<string, unknown> };
+
+export type ChatReply = { conversationId: string; reply: string; status: string; collected: Record<string, string>; complete: boolean };
+export type Lead = { SK: string; convId: string; channel: string; customer: string; collected: Record<string, string>; status: string; handoffReason?: string; notes?: string; summary?: string; updatedAt: number };
+export type Conv = { convId: string; channel: string; customer: string; status: string; collected: Record<string, string>; turns: number; lastAt: number };
+export type ConvDetail = { conversation: Conv; turns: { role: string; text: string; at: number }[] };

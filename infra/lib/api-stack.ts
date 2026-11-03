@@ -113,6 +113,45 @@ export class ApiStack extends cdk.Stack {
       maxConcurrency: 2,
     }));
 
+    // ---- Conversation agent: web/WhatsApp chat, leads. Own Lambda: multi-step Bedrock calls need a longer timeout. ----
+    const aiEnv = {
+      ...common.environment,
+      BEDROCK_MODEL_ID: modelId,
+      GUARDRAIL_ID: props.guardrailId,
+      GUARDRAIL_VERSION: props.guardrailVersion,
+      WHATSAPP_REGION: (this.node.tryGetContext('whatsappRegion') as string) ?? 'ap-southeast-1',
+    };
+    const aiPolicies = [
+      new iam.PolicyStatement({
+        actions: ['bedrock:InvokeModel', 'bedrock:Converse'],
+        resources: ['arn:aws:bedrock:*::foundation-model/*', `arn:aws:bedrock:*:${this.account}:inference-profile/*`],
+      }),
+      new iam.PolicyStatement({
+        actions: ['bedrock:ApplyGuardrail'],
+        resources: [`arn:aws:bedrock:${this.region}:${this.account}:guardrail/${props.guardrailId}`],
+      }),
+      new iam.PolicyStatement({ actions: ['bedrock:Retrieve'], resources: [props.knowledgeBaseArn] }),
+      sendMail,
+    ];
+    const chatFn = new lambda.Function(this, 'ChatFn', {
+      ...common, handler: 'src.api.chat.handler', timeout: cdk.Duration.seconds(29), memorySize: 512, environment: aiEnv,
+    });
+    props.table.grantReadWriteData(chatFn);
+    aiPolicies.forEach((st) => chatFn.addToRolePolicy(st));
+
+    // WhatsApp text adapter: AWS End User Messaging Social -> SNS -> this Lambda (subscription is made by the owner, see README).
+    const whatsappFn = new lambda.Function(this, 'WhatsAppFn', {
+      ...common, handler: 'src.channels.whatsapp.handler', timeout: cdk.Duration.seconds(60), memorySize: 512, environment: aiEnv,
+    });
+    props.table.grantReadWriteData(whatsappFn);
+    aiPolicies.forEach((st) => whatsappFn.addToRolePolicy(st));
+    whatsappFn.addToRolePolicy(new iam.PolicyStatement({
+      actions: ['social-messaging:SendWhatsAppMessage'],
+      resources: [`arn:aws:social-messaging:*:${this.account}:phone-number-id/*`],
+    }));
+    whatsappFn.addPermission('FromSns', { principal: new iam.ServicePrincipal('sns.amazonaws.com'), sourceAccount: this.account });
+    new cdk.CfnOutput(this, 'WhatsAppFnArn', { value: whatsappFn.functionArn });
+
     // ---- HTTP API with Cognito JWT authorizer ----
     const authorizer = new HttpJwtAuthorizer('Jwt',
       `https://cognito-idp.${this.region}.amazonaws.com/${props.userPool.userPoolId}`,
@@ -134,6 +173,11 @@ export class ApiStack extends cdk.Stack {
       integration: new HttpLambdaIntegration('PreflightInt', apiFn),
       authorizer: new apigwv2.HttpNoneAuthorizer(),
     });
+    const chatInt = new HttpLambdaIntegration('ChatInt', chatFn);
+    [['/chat', [apigwv2.HttpMethod.POST]], ['/conversations', [apigwv2.HttpMethod.GET]],
+     ['/conversations/{id}', [apigwv2.HttpMethod.GET]], ['/conversations/{id}/status', [apigwv2.HttpMethod.POST]],
+     ['/leads', [apigwv2.HttpMethod.GET]], ['/channels/whatsapp', [apigwv2.HttpMethod.PUT]],
+    ].forEach(([path, methods]) => api.addRoutes({ path: path as string, methods: methods as apigwv2.HttpMethod[], integration: chatInt }));
     api.addRoutes({
       path: '/{proxy+}',
       methods: [apigwv2.HttpMethod.GET, apigwv2.HttpMethod.POST, apigwv2.HttpMethod.PUT, apigwv2.HttpMethod.DELETE, apigwv2.HttpMethod.PATCH],

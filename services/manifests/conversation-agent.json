@@ -1,0 +1,19 @@
+{
+  "pluginId": "conversation-agent",
+  "name": "Conversation Agent",
+  "version": "1.0.0",
+  "category": "communication",
+  "description": "Chats with customers on WhatsApp or web, answers from the business knowledge base, collects lead details and alerts the owner.",
+  "permissions": ["conversation.read", "conversation.write", "knowledge.read", "lead.write", "notify.send"],
+  "events": ["message.received"],
+  "actions": ["converse", "record_details", "request_handoff", "summarise"],
+  "configurationSchema": {
+    "agentName": { "type": "string", "default": "Assistant" },
+    "businessTone": { "type": "string", "default": "warm, concise, New Zealand English" },
+    "collectFields": { "type": "array", "default": ["name", "phone", "need", "location", "timing"] },
+    "requiredFields": { "type": "array", "default": ["name", "phone", "need"] },
+    "ownerEmail": { "type": "string", "default": "" },
+    "maxTurns": { "type": "number", "default": 30 },
+    "knowledgeBaseId": { "type": "string", "default": "" }
+  }
+}

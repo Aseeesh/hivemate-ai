@@ -5,13 +5,12 @@ import re
 import time
 
 import boto3
-
 from botocore.exceptions import ClientError
 
 from src.common import db, mailer
+from src.common.knowledge import NO_KNOWLEDGE, retrieve
 
 bedrock = boto3.client("bedrock-runtime")
-agent_rt = boto3.client("bedrock-agent-runtime")
 
 SENSITIVE = {"complaint", "refund", "legal", "pricing"}  # never auto-sent regardless of config
 
@@ -25,24 +24,6 @@ Rules:
 - Never state prices, availability or commitments that are not in <knowledge>.
 Respond with ONLY a JSON object:
 {{"category": "faq|booking|pricing|complaint|refund|legal|other", "confidence": 0..1, "reply": "..."}}"""
-
-
-NO_KNOWLEDGE = ("(no knowledge base configured)", "(no matching knowledge)")
-
-
-def retrieve(kb_id: str, query: str, tenant_id: str) -> str:
-    if not kb_id:
-        return NO_KNOWLEDGE[0]
-    res = agent_rt.retrieve(
-        knowledgeBaseId=kb_id,
-        retrievalQuery={"text": query[:1000]},
-        retrievalConfiguration={"vectorSearchConfiguration": {
-            "numberOfResults": 4,
-            # Tenant isolation inside a shared KB: documents are tagged with tenantId metadata.
-            "filter": {"equals": {"key": "tenantId", "value": tenant_id}},
-        }},
-    )
-    return "\n---\n".join(r["content"]["text"] for r in res["retrievalResults"]) or NO_KNOWLEDGE[1]
 
 
 def draft(msg: dict, config: dict, knowledge: str) -> dict:

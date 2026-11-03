@@ -48,6 +48,19 @@ Default model: `apac.amazon.nova-lite-v1:0` (cheap; change in `infra/cdk.json`).
 
 See `docs/ROADMAP.md` for what is next.
 
+## Conversation agent (WhatsApp / web chat)
+
+Plugin `conversation-agent`: a multi-turn agent that answers from the tenant knowledge base, collects lead details
+(configurable `collectFields` / `requiredFields`), keeps the conversation in DynamoDB, summarises it, and emails the owner when a lead
+is complete or a person is needed (complaints, refunds, legal, safety, abuse, or a request for a human).
+Guardrail is applied to every customer message and every reply; the model's reasoning tags are stripped.
+
+- Test it: dashboard **Agent** tab, or `POST /chat`.
+- WhatsApp text: `src/channels/whatsapp.py` is subscribed to the SNS topic of AWS End User Messaging Social (the owner creates the
+  subscription to the `WhatsAppFnArn` stack output), then `PUT /channels/whatsapp` links the number to a business. Unit-tested with
+  Meta webhook fixtures; **not yet run against a live number**.
+- Voice: see `docs/VOICE.md`.
+
 ## Email sending
 
 Replies go out through SES from `SENDER_EMAIL` (CDK context `-c senderEmail=...`), with the business name as the display name.

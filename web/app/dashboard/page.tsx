@@ -6,9 +6,10 @@ import { api, type Me } from '@/lib/api';
 import Plugins from '@/components/Plugins';
 import Documents from '@/components/Documents';
 import Inbox from '@/components/Inbox';
+import Agent from '@/components/Agent';
 import AuditLog from '@/components/AuditLog';
 
-const TABS = ['Inbox', 'Plugins', 'Documents', 'Audit'] as const;
+const TABS = ['Inbox', 'Agent', 'Plugins', 'Documents', 'Audit'] as const;
 type Tab = (typeof TABS)[number];
 
 export default function Dashboard() {
@@ -41,6 +42,7 @@ export default function Dashboard() {
         ))}
       </nav>
       {me && tab === 'Inbox' && <Inbox />}
+      {me && tab === 'Agent' && <Agent isAdmin={isAdmin} />}
       {me && tab === 'Plugins' && <Plugins isAdmin={isAdmin} />}
       {me && tab === 'Documents' && <Documents isAdmin={isAdmin} />}
       {me && tab === 'Audit' && isAdmin && <AuditLog />}
