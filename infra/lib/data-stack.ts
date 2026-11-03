@@ -26,6 +26,7 @@ export class DataStack extends cdk.Stack {
       partitionKey: { name: 'PK', type: dynamodb.AttributeType.STRING },
       sortKey: { name: 'SK', type: dynamodb.AttributeType.STRING },
       billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
+      timeToLiveAttribute: 'ttl', // webhook dedupe markers and rate-limit counters expire by themselves
       encryption: dynamodb.TableEncryption.CUSTOMER_MANAGED,
       encryptionKey: this.dataKey,
       pointInTimeRecoverySpecification: { pointInTimeRecoveryEnabled: true },

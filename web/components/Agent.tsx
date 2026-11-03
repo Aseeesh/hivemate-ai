@@ -79,6 +79,40 @@ function WhatsAppLink() {
   );
 }
 
+function WebChannel() {
+  const [key, setKey] = useState<string | null>(); const [origins, setOrigins] = useState(''); const [msg, setMsg] = useState('');
+  const publicUrl = process.env.NEXT_PUBLIC_PUBLIC_CHAT_URL ?? '';
+  useEffect(() => {
+    api<{ key: string | null; allowedOrigins: string[] }>('GET', '/channels/web').then((c) => { setKey(c.key); setOrigins(c.allowedOrigins.join('\n')); }).catch(() => undefined);
+  }, []);
+  async function save(rotate: boolean) {
+    setMsg('');
+    try {
+      const list = origins.split(/\s+/).filter(Boolean);
+      const c = await api<{ key: string }>('PUT', '/channels/web', { allowedOrigins: list, rotate });
+      setKey(c.key); setMsg(rotate ? 'New key created. The old one stopped working.' : 'Saved.');
+    } catch (err) { setMsg((err as Error).message); }
+  }
+  const snippet = key ? `<script src="${publicUrl}/widget.js" data-key="${key}" async></script>` : '';
+  return (
+    <details className="card"><summary>Add the chat to your website</summary>
+      <div className="stack" style={{ marginTop: 12 }}>
+        <p className="muted">Paste one line into your site. Visitors chat with this agent without signing in; leads show up below. Limit it to your own site so others can&apos;t embed it.</p>
+        <label>Allowed websites (one per line, e.g. https://sparkclean.co.nz; leave empty to allow any)
+          <textarea rows={3} value={origins} onChange={(e) => setOrigins(e.target.value)} />
+        </label>
+        <div className="row">
+          <button className="btn primary" onClick={() => save(false)}>{key ? 'Save' : 'Create embed code'}</button>
+          {key && <button className="btn" onClick={() => save(true)}>Rotate key</button>}
+          <span role="status" className="muted">{msg}</span>
+        </div>
+        {key && <><label>Embed code<input readOnly value={snippet} onFocus={(e) => e.currentTarget.select()} /></label>
+          {!publicUrl && <p className="muted">Set NEXT_PUBLIC_PUBLIC_CHAT_URL in web/.env.local to the PublicChatUrl stack output.</p>}</>}
+      </div>
+    </details>
+  );
+}
+
 export default function Agent({ isAdmin }: { isAdmin: boolean }) {
   const [leads, setLeads] = useState<Lead[]>([]); const [convs, setConvs] = useState<Conv[]>([]); const [open, setOpen] = useState<string>();
   const load = useCallback(() => {
@@ -90,6 +124,7 @@ export default function Agent({ isAdmin }: { isAdmin: boolean }) {
   return (
     <div className="stack">
       <TestChat onTurn={load} />
+      {isAdmin && <WebChannel />}
       {isAdmin && <WhatsAppLink />}
       <section className="stack">
         <h2>Leads</h2>

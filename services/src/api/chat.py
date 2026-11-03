@@ -1,6 +1,7 @@
 """Conversation API: test/web chat, conversations, leads and WhatsApp channel linking."""
 import json
 import re
+import secrets
 
 from botocore.exceptions import ClientError
 
@@ -9,6 +10,7 @@ from src.common.context import Forbidden, from_event
 from src.plugins.conversation import agent
 
 CONV_ID = re.compile(r"^[a-f0-9]{8,40}$")
+ORIGIN = re.compile(r"^https?://[A-Za-z0-9.-]+(:\d{1,5})?$")
 
 
 def _resp(status: int, body) -> dict:
@@ -78,6 +80,23 @@ def handler(event, _context):
                                       "metaPhoneNumberId": meta_id, "originationPhoneNumberId": origination})
             db.audit(ctx.pk, ctx.user_id, "channel.whatsapp_linked", {"metaPhoneNumberId": meta_id})
             return _resp(200, {"linked": meta_id})
+
+        if (method, path) == ("GET", "/channels/web"):
+            ctx.require_admin()
+            item = db.table().get_item(Key={"PK": ctx.pk, "SK": "CHANNEL#web"}).get("Item")
+            return _resp(200, {"key": item["siteKey"], "allowedOrigins": item.get("allowedOrigins", [])} if item else {"key": None, "allowedOrigins": []})
+
+        if (method, path) == ("PUT", "/channels/web"):
+            ctx.require_admin()
+            origins = body.get("allowedOrigins", [])
+            if not isinstance(origins, list) or len(origins) > 10 or not all(isinstance(o, str) and ORIGIN.match(o) for o in origins):
+                return _resp(400, {"error": "allowedOrigins must be up to 10 origins like https://example.co.nz"})
+            key = {"PK": ctx.pk, "SK": "CHANNEL#web"}
+            current = db.table().get_item(Key=key).get("Item")
+            site_key = current["siteKey"] if current and not body.get("rotate") else "pk_" + secrets.token_urlsafe(18)
+            db.table().put_item(Item={**key, "GSI1PK": f"WEB#{site_key}", "GSI1SK": ctx.pk, "siteKey": site_key, "allowedOrigins": origins})
+            db.audit(ctx.pk, ctx.user_id, "channel.web_configured", {"rotated": bool(body.get("rotate")), "origins": origins})
+            return _resp(200, {"key": site_key, "allowedOrigins": origins})
 
         return _resp(404, {"error": "not found"})
     except Forbidden as e:

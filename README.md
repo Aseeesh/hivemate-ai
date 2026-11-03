@@ -59,6 +59,12 @@ Guardrail is applied to every customer message and every reply; the model's reas
 - WhatsApp text: `src/channels/whatsapp.py` is subscribed to the SNS topic of AWS End User Messaging Social (the owner creates the
   subscription to the `WhatsAppFnArn` stack output), then `PUT /channels/whatsapp` links the number to a business. Unit-tested with
   Meta webhook fixtures; **not yet run against a live number**.
+- Website chat (no login): the owner creates an embed code in the dashboard (Agent tab) and pastes
+  `<script src="<PublicChatUrl>/widget.js" data-key="pk_..." async></script>` into their site. It runs on a **separate public API**
+  (`src/channels/web.py`) so open CORS never touches the authenticated API. The site key only selects the business; abuse is bounded by an
+  optional Origin allow-list, 30 messages/visitor/hour, 300/business/day (DynamoDB counters with TTL), an 800-character limit, and API throttling.
+  Replies never include captured lead data. Keys can be rotated. Live-tested (`tests/e2e/public_chat_e2e.py`, 25 checks) and the widget
+  was exercised in a real browser. See `docs/widget-demo.html`.
 - Voice: see `docs/VOICE.md`.
 
 ## Email sending

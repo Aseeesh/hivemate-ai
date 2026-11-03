@@ -177,6 +177,7 @@ export class ApiStack extends cdk.Stack {
     [['/chat', [apigwv2.HttpMethod.POST]], ['/conversations', [apigwv2.HttpMethod.GET]],
      ['/conversations/{id}', [apigwv2.HttpMethod.GET]], ['/conversations/{id}/status', [apigwv2.HttpMethod.POST]],
      ['/leads', [apigwv2.HttpMethod.GET]], ['/channels/whatsapp', [apigwv2.HttpMethod.PUT]],
+     ['/channels/web', [apigwv2.HttpMethod.GET, apigwv2.HttpMethod.PUT]],
     ].forEach(([path, methods]) => api.addRoutes({ path: path as string, methods: methods as apigwv2.HttpMethod[], integration: chatInt }));
     api.addRoutes({
       path: '/{proxy+}',
@@ -185,5 +186,23 @@ export class ApiStack extends cdk.Stack {
     });
 
     new cdk.CfnOutput(this, 'ApiUrl', { value: api.apiEndpoint });
+
+    // ---- Public website chat: separate API so open CORS and tight throttling never touch the authenticated API ----
+    const publicChatFn = new lambda.Function(this, 'PublicChatFn', {
+      ...common, handler: 'src.channels.web.handler', timeout: cdk.Duration.seconds(29), memorySize: 512, environment: aiEnv,
+    });
+    props.table.grantReadWriteData(publicChatFn);
+    aiPolicies.forEach((st) => publicChatFn.addToRolePolicy(st));
+    const publicApi = new apigwv2.HttpApi(this, 'PublicApi', {
+      apiName: 'hivemate-public-chat',
+      corsPreflight: { allowOrigins: ['*'], allowMethods: [apigwv2.CorsHttpMethod.GET, apigwv2.CorsHttpMethod.POST], allowHeaders: ['content-type'] },
+    });
+    const publicInt = new HttpLambdaIntegration('PublicChatInt', publicChatFn);
+    publicApi.addRoutes({ path: '/widget.js', methods: [apigwv2.HttpMethod.GET], integration: publicInt });
+    publicApi.addRoutes({ path: '/info', methods: [apigwv2.HttpMethod.GET], integration: publicInt });
+    publicApi.addRoutes({ path: '/chat', methods: [apigwv2.HttpMethod.POST], integration: publicInt });
+    // Burst/steady limits across the whole public API; the account-wide Lambda quota is small.
+    (publicApi.defaultStage!.node.defaultChild as apigwv2.CfnStage).defaultRouteSettings = { throttlingBurstLimit: 10, throttlingRateLimit: 5 };
+    new cdk.CfnOutput(this, 'PublicChatUrl', { value: publicApi.apiEndpoint });
   }
 }
