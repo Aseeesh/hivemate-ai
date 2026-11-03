@@ -23,9 +23,12 @@ Respond with ONLY a JSON object:
 {{"category": "faq|booking|pricing|complaint|refund|legal|other", "confidence": 0..1, "reply": "..."}}"""
 
 
+NO_KNOWLEDGE = ("(no knowledge base configured)", "(no matching knowledge)")
+
+
 def retrieve(kb_id: str, query: str, tenant_id: str) -> str:
     if not kb_id:
-        return "(no knowledge base configured)"
+        return NO_KNOWLEDGE[0]
     res = agent_rt.retrieve(
         knowledgeBaseId=kb_id,
         retrievalQuery={"text": query[:1000]},
@@ -35,7 +38,7 @@ def retrieve(kb_id: str, query: str, tenant_id: str) -> str:
             "filter": {"equals": {"key": "tenantId", "value": tenant_id}},
         }},
     )
-    return "\n---\n".join(r["content"]["text"] for r in res["retrievalResults"]) or "(no matching knowledge)"
+    return "\n---\n".join(r["content"]["text"] for r in res["retrievalResults"]) or NO_KNOWLEDGE[1]
 
 
 def draft(msg: dict, config: dict, knowledge: str) -> dict:
@@ -86,6 +89,8 @@ def process(detail: dict) -> None:
         or result["category"] in SENSITIVE
         or result["category"] not in config["autoReplyCategories"]
         or result["confidence"] < config["confidenceThreshold"]
+        # The model can invent facts when it has nothing to ground on; a human must check those.
+        or knowledge in NO_KNOWLEDGE
     )
     # TODO(phase 5): when not needs_approval, send through SES instead of recording.
     status = "PENDING_APPROVAL" if needs_approval else "SENT_SIMULATED"

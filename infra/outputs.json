@@ -1,0 +1,29 @@
+{
+  "hivemate-dev-events": {
+    "ExportsOutputFnGetAttBusEA82B648ArnBC65BB77": "arn:aws:events:ap-southeast-2:520891536070:event-bus/hivemate",
+    "ExportsOutputFnGetAttEmailQueue9C1DA90FArn911CFC4A": "arn:aws:sqs:ap-southeast-2:520891536070:hivemate-dev-events-EmailQueue9C1DA90F-CjinK1nAiRp0",
+    "ExportsOutputRefBusEA82B6486A28F94F": "hivemate"
+  },
+  "hivemate-dev-data": {
+    "TableName": "hivemate-dev-data-TableCD117FA1-BKVY20BA6VRQ",
+    "ExportsOutputRefTableCD117FA1D18A8047": "hivemate-dev-data-TableCD117FA1-BKVY20BA6VRQ",
+    "ExportsOutputRefDocsBucketECEA003FBE2AA417": "hivemate-dev-data-docsbucketecea003f-4yatirrim7l5",
+    "ExportsOutputFnGetAttDocsBucketECEA003FArn8A043E5D": "arn:aws:s3:::hivemate-dev-data-docsbucketecea003f-4yatirrim7l5",
+    "ExportsOutputFnGetAttTableCD117FA1ArnE2C8C204": "arn:aws:dynamodb:ap-southeast-2:520891536070:table/hivemate-dev-data-TableCD117FA1-BKVY20BA6VRQ",
+    "ExportsOutputFnGetAttDataKey17AFBB84ArnCE2A1BC6": "arn:aws:kms:ap-southeast-2:520891536070:key/c469b9ff-5cd5-4243-865e-c5292f85e799",
+    "DocsBucketName": "hivemate-dev-data-docsbucketecea003f-4yatirrim7l5"
+  },
+  "hivemate-dev-ai": {
+    "ExportsOutputFnGetAttGuardrailGuardrailId78EA463E": "84z5fvy9s62l",
+    "ExportsOutputFnGetAttGuardrailV1Version4D4E0A10": "1"
+  },
+  "hivemate-dev-auth": {
+    "UserPoolClientId": "6vs8qluupkspq2oe9rua7960fv",
+    "UserPoolId": "ap-southeast-2_sophUyb9B",
+    "ExportsOutputRefUserPoolWebClient4C9370B02E2C9FF9": "6vs8qluupkspq2oe9rua7960fv",
+    "ExportsOutputRefUserPool6BA7E5F296FD7236": "ap-southeast-2_sophUyb9B"
+  },
+  "hivemate-dev-api": {
+    "ApiUrl": "https://aq95c02ml5.execute-api.ap-southeast-2.amazonaws.com"
+  }
+}

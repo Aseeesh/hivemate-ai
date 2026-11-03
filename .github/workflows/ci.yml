@@ -29,7 +29,8 @@ jobs:
 
   deploy:
     needs: test
-    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    # Skipped until an AWS OIDC role is configured (AWS_ROLE_ARN repo variable).
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && vars.AWS_ROLE_ARN != ''
     runs-on: ubuntu-latest
     environment: dev
     concurrency: deploy-dev

@@ -52,3 +52,8 @@ See `docs/ROADMAP.md` for what is next.
 `.github/workflows/ci.yml`: tests + `cdk synth` on every PR; on push to `main` it assumes an AWS role through GitHub OIDC
 (no stored keys) and runs `cdk bootstrap` + `cdk deploy --all`.
 Repo variables required: `AWS_ROLE_ARN`, `AWS_ACCOUNT_ID`, `ALERT_EMAIL`. Local deploys: `npx cdk deploy --all -c alertEmail=you@example.com`.
+
+## Deployed (dev)
+
+Deployed to `ap-southeast-2` from a laptop with `cdk deploy --all -c alertEmail=...` because the AWS account's
+organization policy blocks the GitHub OIDC provider. The CI deploy job stays skipped until `AWS_ROLE_ARN` is set.
