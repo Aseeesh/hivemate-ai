@@ -4,6 +4,7 @@ import sys
 import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../.."))
+os.environ.setdefault("AWS_DEFAULT_REGION", "ap-southeast-2")  # modules build boto3 clients at import
 os.environ["MANIFEST_DIR"] = os.path.join(os.path.dirname(__file__), "../manifests")
 
 from services.src.common import plugins  # noqa: E402
