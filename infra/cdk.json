@@ -4,6 +4,7 @@
     "@aws-cdk/core:newStyleStackSynthesis": true,
     "stage": "dev",
     "alertEmail": "",
+    "senderEmail": "",
     "monthlyBudgetUsd": 20,
     "bedrockModelId": "apac.amazon.nova-lite-v1:0"
   }

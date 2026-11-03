@@ -11,7 +11,7 @@ export default function Inbox() {
   useEffect(() => { load(); const t = setInterval(load, 5000); return () => clearInterval(t); }, [load]);
 
   async function decide(m: Message, action: 'approve' | 'reject') {
-    setBusy(true); try { await api('POST', `/messages/${m.SK.replace('MSG#', '')}/${action}`); await load(); } catch (e) { setMsg((e as Error).message); } finally { setBusy(false); }
+    setBusy(true); setMsg(''); try { await api('POST', `/messages/${m.SK.replace('MSG#', '')}/${action}`); await load(); } catch (e) { setMsg((e as Error).message); } finally { setBusy(false); }
   }
   async function send(e: FormEvent) {
     e.preventDefault(); setBusy(true); setMsg('');
@@ -30,6 +30,7 @@ export default function Inbox() {
           <p className="muted">Needs the Email Automation plugin installed. Real inbound mail arrives with SES later.</p>
         </form>
       </details>
+      {msg && <p className="err" role="alert">{msg}</p>}
       {!msgs.length && <p className="muted">No messages yet.</p>}
       {msgs.map((m) => (
         <article key={m.SK} className="card stack">
@@ -38,6 +39,7 @@ export default function Inbox() {
             <div className="row"><span className="tag">{m.category} · {Math.round(m.confidence * 100)}%</span><span className={`tag ${tone(m.status)}`}>{m.status}</span></div>
           </div>
           <span className="muted">From {m.from}</span>
+          {m.sendError && <p className="err">Automatic send failed, so this is waiting for you: {m.sendError}</p>}
           <p>{m.body}</p>
           <div><strong>AI draft</strong><blockquote>{m.draftReply || <em className="muted">No draft produced. Reply manually.</em>}</blockquote></div>
           {m.status === 'PENDING_APPROVAL' && <div className="row">

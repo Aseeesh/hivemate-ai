@@ -6,7 +6,9 @@ import time
 
 import boto3
 
-from src.common import db
+from botocore.exceptions import ClientError
+
+from src.common import db, mailer
 
 bedrock = boto3.client("bedrock-runtime")
 agent_rt = boto3.client("bedrock-agent-runtime")
@@ -94,17 +96,28 @@ def process(detail: dict) -> None:
         # The model can invent facts when it has nothing to ground on; a human must check those.
         or knowledge in NO_KNOWLEDGE
     )
-    # TODO(phase 5): when not needs_approval, send through SES instead of recording.
-    status = "PENDING_APPROVAL" if needs_approval else "SENT_SIMULATED"
+    status, send_error, ses_id = "PENDING_APPROVAL", "", ""
+    if not needs_approval:
+        if mailer.enabled():
+            meta = db.table().get_item(Key={"PK": pk, "SK": "META"}).get("Item", {})
+            try:
+                ses_id = mailer.send_reply(business=meta.get("name", ""), to=detail["from"], subject=detail["subject"],
+                                           body=result["reply"], reply_to=config["sendFrom"])
+                status = "SENT"
+            except (ClientError, ValueError) as exc:  # e.g. SES sandbox recipient not verified: keep it for a human
+                send_error = str(exc)[:300]
+        else:
+            status = "SENT_SIMULATED"
 
     db.table().put_item(Item=db.to_ddb({
         "PK": pk, "SK": f"MSG#{message_id}",
         "from": detail["from"], "subject": detail["subject"], "body": detail["body"],
         "category": result["category"], "confidence": result["confidence"],
         "draftReply": result["reply"], "status": status, "createdAt": int(time.time()),
+        **({"sendError": send_error} if send_error else {}), **({"sesMessageId": ses_id} if ses_id else {}),
     }))
     db.audit(pk, "plugin:email-automation", "email.drafted", {
-        "messageId": message_id, "category": result["category"], "status": status,
+        "messageId": message_id, "category": result["category"], "status": status, "sendError": send_error,
         "model": os.environ["BEDROCK_MODEL_ID"],
     })
 

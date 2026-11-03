@@ -24,7 +24,7 @@ jobs:
       - run: pip install pytest boto3 && pytest services/tests -q
       - run: npm ci
         working-directory: infra
-      - run: npx tsc --noEmit && npx cdk synth --quiet -c alertEmail=ci@example.com
+      - run: npx tsc --noEmit && npx cdk synth --quiet -c alertEmail=ci@example.com -c senderEmail=ci@example.com
         working-directory: infra
       - run: npm ci && npm run typecheck && npm run build
         working-directory: web
@@ -52,7 +52,7 @@ jobs:
         env:
           CDK_DEFAULT_ACCOUNT: ${{ vars.AWS_ACCOUNT_ID }}
       - name: Deploy
-        run: npx cdk deploy --all --require-approval never -c alertEmail=${{ vars.ALERT_EMAIL }} --outputs-file outputs.json
+        run: npx cdk deploy --all --require-approval never -c alertEmail=${{ vars.ALERT_EMAIL }} -c senderEmail=${{ vars.SENDER_EMAIL }} --outputs-file outputs.json
         working-directory: infra
         env:
           CDK_DEFAULT_ACCOUNT: ${{ vars.AWS_ACCOUNT_ID }}

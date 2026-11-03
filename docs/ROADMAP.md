@@ -8,7 +8,8 @@
 - [ ] Auto-sync KB on upload (S3 event -> debounced ingestion); Document Analysis plugin (Textract + Bedrock)
 - [ ] AI evaluation suite: golden questions per tenant, check grounding, no cross-tenant leakage, no invented facts
 - [x] Next.js dashboard (Cognito SRP login + signup confirm, plugin catalog/config, documents, inbox approval queue, audit)
-- [ ] Phase 5: SES inbound + send, website chat (WebSocket/API GW), WhatsApp via End User Messaging Social (check region)
+- [x] SES outbound: approve and auto-reply send real email (sandbox: verified recipients only)
+- [ ] Phase 5: SES inbound (needs a domain), website chat (WebSocket/API GW), WhatsApp via End User Messaging Social (check region)
 - [ ] Booking plugin + Step Functions workflow
 - [ ] Phase 6: CloudWatch dashboard, X-Ray, per-tenant usage metering, load tests, CI deploy via OIDC role
 - [ ] Phase 7: threat model, Well-Architected review, cost analysis, demo tenants (SparkClean NZ, Auckland Property Services, Kiwi Retail)

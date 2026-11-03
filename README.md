@@ -48,6 +48,13 @@ Default model: `apac.amazon.nova-lite-v1:0` (cheap; change in `infra/cdk.json`).
 
 See `docs/ROADMAP.md` for what is next.
 
+## Email sending
+
+Replies go out through SES from `SENDER_EMAIL` (CDK context `-c senderEmail=...`), with the business name as the display name.
+The account is in the SES sandbox: the sender and every recipient must be verified until production access is granted.
+If SES refuses a send, the draft stays `PENDING_APPROVAL` with the error shown, and nothing is lost.
+Inbound mail (SES receiving) needs a domain you control and is not set up yet.
+
 ## Dashboard
 
 ```bash

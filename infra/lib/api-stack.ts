@@ -10,6 +10,7 @@ import * as kms from 'aws-cdk-lib/aws-kms';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import { SqsEventSource } from 'aws-cdk-lib/aws-lambda-event-sources';
 import * as s3 from 'aws-cdk-lib/aws-s3';
+import * as ses from 'aws-cdk-lib/aws-ses';
 import * as sqs from 'aws-cdk-lib/aws-sqs';
 import * as path from 'path';
 import { Construct } from 'constructs';
@@ -37,6 +38,15 @@ export class ApiStack extends cdk.Stack {
       exclude: ['tests', '**/__pycache__', '*.pyc'],
     });
     const modelId = this.node.tryGetContext('bedrockModelId') as string;
+    const senderEmail = this.node.tryGetContext('senderEmail') as string;
+    if (!senderEmail) throw new Error('Pass -c senderEmail=you@example.com (CI: SENDER_EMAIL variable)');
+    // SES emails a verification link to this address; sending is blocked until it is clicked.
+    new ses.EmailIdentity(this, 'SenderIdentity', { identity: ses.Identity.email(senderEmail) });
+    const sendMail = new iam.PolicyStatement({
+      actions: ['ses:SendEmail'],
+      // In the SES sandbox AWS also authorizes against each (verified) recipient identity, hence the wildcard.
+      resources: [`arn:aws:ses:${this.region}:${this.account}:identity/*`],
+    });
     const common = {
       runtime: lambda.Runtime.PYTHON_3_13,
       code,
@@ -48,6 +58,7 @@ export class ApiStack extends cdk.Stack {
         EVENT_BUS: props.bus.eventBusName,
         MANIFEST_DIR: '/var/task/manifests',
         POWERTOOLS_SERVICE_NAME: 'hivemate',
+        SENDER_EMAIL: senderEmail,
         KNOWLEDGE_BASE_ID: props.knowledgeBaseId,
         DATA_SOURCE_ID: props.dataSourceId,
       },
@@ -61,6 +72,7 @@ export class ApiStack extends cdk.Stack {
     });
     props.table.grantReadWriteData(apiFn);
     props.bus.grantPutEventsTo(apiFn);
+    apiFn.addToRolePolicy(sendMail);
     props.docsBucket.grantReadWrite(apiFn); // prefix scoping is enforced in code (tenant prefix)
     apiFn.addToRolePolicy(new iam.PolicyStatement({
       actions: ['bedrock:StartIngestionJob', 'bedrock:ListIngestionJobs', 'bedrock:GetIngestionJob'],
@@ -93,6 +105,7 @@ export class ApiStack extends cdk.Stack {
       actions: ['bedrock:Retrieve'],
       resources: [props.knowledgeBaseArn],
     }));
+    emailFn.addToRolePolicy(sendMail);
     emailFn.addEventSource(new SqsEventSource(props.emailQueue, {
       batchSize: 5,
       reportBatchItemFailures: true,

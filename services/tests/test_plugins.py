@@ -36,3 +36,14 @@ def test_document_names_cannot_escape_tenant_prefix():
     assert documents.safe_name("my faq (v2).txt") == "my_faq__v2_.txt"
     with pytest.raises(ValueError):
         documents.safe_name("malware.exe")
+
+
+def test_mailer_blocks_header_injection():
+    sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+    from src.common import mailer
+    assert "\n" not in mailer.reply_subject("Hi\r\nBcc: evil@x.com")
+    assert mailer.reply_subject("Re: hello") == "Re: hello"
+    assert "<" not in mailer.display_name('Spark <Clean>", NZ')
+    assert mailer.valid_address("jo@example.com")
+    assert not mailer.valid_address("jo@example.com, other@example.com")
+    assert not mailer.valid_address("a b@example.com")

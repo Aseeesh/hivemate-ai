@@ -6,9 +6,10 @@ import time
 import uuid
 
 import boto3
+from botocore.exceptions import ClientError
 
 from src.api import documents
-from src.common import db, plugins
+from src.common import db, mailer, plugins
 from src.common.context import Forbidden, from_event
 
 events = boto3.client("events")
@@ -87,8 +88,19 @@ def handler(event, _context):
                 return _resp(404, {"error": "not found"})
             if item["status"] != "PENDING_APPROVAL":
                 return _resp(409, {"error": f"message is {item['status']}"})
-            # TODO(phase 5): on approve, send via SES. Recorded as simulated for now.
-            new_status = "SENT_SIMULATED" if m.group(2) == "approve" else "REJECTED"
+            new_status = "REJECTED"
+            if m.group(2) == "approve":
+                new_status = "SENT_SIMULATED"
+                if mailer.enabled():
+                    meta = db.table().get_item(Key={"PK": ctx.pk, "SK": "META"}).get("Item", {})
+                    plug = db.table().get_item(Key={"PK": ctx.pk, "SK": "PLUGIN#email-automation"}).get("Item", {})
+                    try:
+                        mailer.send_reply(business=meta.get("name", ""), to=item["from"], subject=item["subject"],
+                                          body=item["draftReply"], reply_to=plug.get("config", {}).get("sendFrom", ""))
+                        new_status = "SENT"
+                    except (ClientError, ValueError) as exc:  # leave it pending so nothing is lost
+                        db.audit(ctx.pk, ctx.user_id, "message.send_failed", {"messageId": m.group(1), "error": str(exc)[:200]})
+                        return _resp(502, {"error": f"Email could not be sent: {exc}"})
             db.table().update_item(
                 Key=key, UpdateExpression="SET #s = :s, reviewedBy = :u",
                 ExpressionAttributeNames={"#s": "status"},
