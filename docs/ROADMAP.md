@@ -5,6 +5,8 @@
 - [x] Deploy `dev` to ap-southeast-2, smoke test end to end
 - [x] Phase 4 RAG: Bedrock Knowledge Base on S3 Vectors, per-tenant `tenantId` metadata filter, verified with two tenants
 - [x] Document upload (presigned POST, SigV4), list, delete, KB sync endpoints
+- [x] Full e2e test on deployed stack (tests/e2e/e2e.py): 49/51 on first run; the 2 failures were Lambda throttling (account concurrency quota = 10), worker concurrency now capped at 2
+- [ ] Request a Lambda concurrency quota increase (Service Quotas L-B99A9384) so bursts above ~10 concurrent requests are not throttled
 - [ ] Auto-sync KB on upload (S3 event -> debounced ingestion); Document Analysis plugin (Textract + Bedrock)
 - [ ] AI evaluation suite: golden questions per tenant, check grounding, no cross-tenant leakage, no invented facts
 - [x] Next.js dashboard (Cognito SRP login + signup confirm, plugin catalog/config, documents, inbox approval queue, audit)

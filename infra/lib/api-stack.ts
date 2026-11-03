@@ -109,6 +109,8 @@ export class ApiStack extends cdk.Stack {
     emailFn.addEventSource(new SqsEventSource(props.emailQueue, {
       batchSize: 5,
       reportBatchItemFailures: true,
+      // The account-wide Lambda limit is small (10 on a new account); keep the AI worker from starving the API.
+      maxConcurrency: 2,
     }));
 
     // ---- HTTP API with Cognito JWT authorizer ----
