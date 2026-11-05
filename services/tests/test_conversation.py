@@ -178,3 +178,31 @@ def test_llm_call_failure_is_logged_and_reraised(capsys):
     with pytest.raises(ClientError):
         llmlog.converse(Boom(), "email", modelId="m")
     assert json.loads(capsys.readouterr().out)["error"] == "ThrottlingException"
+
+
+def test_resuming_a_handed_off_conversation_updates_its_lead(monkeypatch):
+    from src.api import chat
+
+    class FakeTable:
+        def __init__(self):
+            self.items = {("TENANT#t1", "CONV#abcdef12"): {"status": "HANDOFF"},
+                          ("TENANT#t1", "LEAD#abcdef12"): {"status": "HANDOFF", "handoffReason": "refund"}}
+
+        def get_item(self, Key):
+            it = self.items.get((Key["PK"], Key["SK"]))
+            return {"Item": dict(it)} if it else {}
+
+        def update_item(self, Key, ExpressionAttributeValues, **kw):
+            it = self.items[(Key["PK"], Key["SK"])]
+            it["status"] = ExpressionAttributeValues[":s"]
+            if ":r" in ExpressionAttributeValues:
+                it["handoffReason"] = ExpressionAttributeValues[":r"]
+
+    t = FakeTable()
+    monkeypatch.setattr(chat.db, "table", lambda: t)
+    monkeypatch.setattr(chat.db, "audit", lambda *a, **k: None)
+    ev = {"requestContext": {"http": {"method": "POST"}, "authorizer": {"jwt": {"claims": {"custom:tenantId": "t1", "custom:role": "admin", "sub": "u", "email": "a@b.nz"}}}},
+          "rawPath": "/conversations/abcdef12/status", "body": json.dumps({"status": "OPEN"})}
+    assert chat.handler(ev, None)["statusCode"] == 200
+    assert t.items[("TENANT#t1", "CONV#abcdef12")]["status"] == "OPEN"
+    assert t.items[("TENANT#t1", "LEAD#abcdef12")] == {"status": "COLLECTING", "handoffReason": ""}

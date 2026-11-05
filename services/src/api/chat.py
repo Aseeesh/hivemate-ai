@@ -59,6 +59,12 @@ def handler(event, _context):
             if not db.table().get_item(Key=key).get("Item"):
                 return _resp(404, {"error": "not found"})
             db.table().update_item(Key=key, UpdateExpression="SET #s = :s", ExpressionAttributeNames={"#s": "status"}, ExpressionAttributeValues={":s": status})
+            # The lead card mirrors the conversation: a resumed or closed chat must not keep saying "needs a person".
+            lead_key = {"PK": ctx.pk, "SK": f"LEAD#{m.group(1)}"}
+            lead = db.table().get_item(Key=lead_key).get("Item")
+            if lead and lead.get("status") == "HANDOFF":
+                db.table().update_item(Key=lead_key, UpdateExpression="SET #s = :s, handoffReason = :r", ExpressionAttributeNames={"#s": "status"},
+                                       ExpressionAttributeValues={":s": "COLLECTING" if status == "OPEN" else "CLOSED", ":r": ""})
             db.audit(ctx.pk, ctx.user_id, "conversation.status", {"convId": m.group(1), "status": status})
             return _resp(200, {"status": status})
 

@@ -48,3 +48,18 @@ Found: the owner alert email failed (`MessageRejected`, address not verified): S
 Found: a place name ("Hamilton") was stored in `need`, not `location` (known gap).
 
 Not yet verified: the super admin console in a browser and the authenticated `tests/e2e/console_e2e.py` run (need the owner's passwords and a member in `platform-admins`); document upload and the Inbox test email on the hosted site.
+
+### Further browser checks on the hosted site (same session)
+| Check | Result |
+|---|---|
+| Conversation transcript opens | works |
+| Website embed code created with the live public chat URL and a site key | works |
+| Complaint -> handoff: safe reply, HANDOFF badge, lead with reason and summary | works |
+| "Give back to the agent" sets the conversation back to OPEN | works; the lead card stayed HANDOFF (fixed, unit-tested, not re-clicked) |
+| Document upload from the browser to S3 (CORS + CSP) | works |
+| Sync knowledge, per-business status COMPLETE | works |
+| Agent answers from the uploaded file ($55/hour, closed weekends) | works |
+| Install Email Automation, send test email, AI draft correct, held PENDING_APPROVAL (low confidence) | works |
+| Reject a draft; audit trail shows upload, sync, installs, turns, draft, rejection | works |
+| Success message in the Inbox looked like an error (red) | fixed |
+| Owner alert emails (lead and handoff) | fail: SES sandbox, address unverified |

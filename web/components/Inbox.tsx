@@ -5,18 +5,18 @@ import { api, type Message } from '@/lib/api';
 const tone = (s: string) => (s === 'PENDING_APPROVAL' ? 'hold' : s === 'REJECTED' ? 'bad' : 'ok');
 
 export default function Inbox() {
-  const [msgs, setMsgs] = useState<Message[]>([]); const [msg, setMsg] = useState(''); const [busy, setBusy] = useState(false);
+  const [msgs, setMsgs] = useState<Message[]>([]); const [msg, setMsg] = useState(''); const [isErr, setIsErr] = useState(false); const [busy, setBusy] = useState(false);
   const [from, setFrom] = useState('customer@example.com'); const [subject, setSubject] = useState('Opening hours'); const [body, setBody] = useState('What time do you open on Saturday?');
-  const load = useCallback(() => api<Message[]>('GET', '/messages').then(setMsgs).catch((e: Error) => setMsg(e.message)), []);
+  const load = useCallback(() => api<Message[]>('GET', '/messages').then(setMsgs).catch((e: Error) => { setIsErr(true); setMsg(e.message); }), []);
   useEffect(() => { load(); const t = setInterval(load, 5000); return () => clearInterval(t); }, [load]);
 
   async function decide(m: Message, action: 'approve' | 'reject') {
-    setBusy(true); setMsg(''); try { await api('POST', `/messages/${m.SK.replace('MSG#', '')}/${action}`); await load(); } catch (e) { setMsg((e as Error).message); } finally { setBusy(false); }
+    setBusy(true); setMsg(''); setIsErr(true); try { await api('POST', `/messages/${m.SK.replace('MSG#', '')}/${action}`); await load(); } catch (e) { setMsg((e as Error).message); } finally { setBusy(false); }
   }
   async function send(e: FormEvent) {
-    e.preventDefault(); setBusy(true); setMsg('');
+    e.preventDefault(); setBusy(true); setMsg(''); setIsErr(false);
     try { await api('POST', '/plugins/email-automation/ingest', { from, subject, body }); setMsg('Sent. The AI draft appears in a few seconds.'); }
-    catch (err) { setMsg((err as Error).message); } finally { setBusy(false); }
+    catch (err) { setIsErr(true); setMsg((err as Error).message); } finally { setBusy(false); }
   }
 
   return (
@@ -30,7 +30,7 @@ export default function Inbox() {
           <p className="muted">Needs the Email Automation plugin installed. Real inbound mail arrives with SES later.</p>
         </form>
       </details>
-      {msg && <p className="err" role="alert">{msg}</p>}
+      {msg && <p className={isErr ? 'err' : 'ok'} role={isErr ? 'alert' : 'status'}>{msg}</p>}
       {!msgs.length && <p className="muted">No messages yet.</p>}
       {msgs.map((m) => (
         <article key={m.SK} className="card stack">
