@@ -5,6 +5,7 @@ import { EventsStack } from '../lib/events-stack';
 import { AiStack } from '../lib/ai-stack';
 import { ApiStack } from '../lib/api-stack';
 import { CostStack } from '../lib/cost-stack';
+import { WebStack } from '../lib/web-stack';
 
 const app = new cdk.App();
 const stage = app.node.tryGetContext('stage') as string;
@@ -34,6 +35,7 @@ const api = new ApiStack(app, `${prefix}-api`, {
   dataSourceId: ai.dataSourceId,
 });
 new CostStack(app, `${prefix}-cost`, { env });
+new WebStack(app, `${prefix}-web`, { env });
 
 cdk.Tags.of(app).add('project', 'hivemate-ai');
 cdk.Tags.of(app).add('stage', stage);

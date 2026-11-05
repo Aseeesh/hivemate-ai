@@ -14,6 +14,7 @@ import * as ses from 'aws-cdk-lib/aws-ses';
 import * as sqs from 'aws-cdk-lib/aws-sqs';
 import * as path from 'path';
 import { Construct } from 'constructs';
+import { webOrigins } from './origins';
 
 interface ApiStackProps extends cdk.StackProps {
   table: dynamodb.ITable;
@@ -160,7 +161,7 @@ export class ApiStack extends cdk.Stack {
     const api = new apigwv2.HttpApi(this, 'HttpApi', {
       apiName: 'hivemate-api',
       corsPreflight: {
-        allowOrigins: ['http://localhost:3000'],
+        allowOrigins: ['http://localhost:3000', ...webOrigins(this)],
         allowMethods: [apigwv2.CorsHttpMethod.ANY],
         allowHeaders: ['authorization', 'content-type'],
       },

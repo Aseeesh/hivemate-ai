@@ -3,6 +3,7 @@ import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import * as kms from 'aws-cdk-lib/aws-kms';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import { Construct } from 'constructs';
+import { webOrigins } from './origins';
 
 /**
  * Single-table DynamoDB design, partitioned by tenant:
@@ -50,7 +51,7 @@ export class DataStack extends cdk.Stack {
       autoDeleteObjects: true,
       cors: [{
         allowedMethods: [s3.HttpMethods.POST, s3.HttpMethods.PUT, s3.HttpMethods.GET],
-        allowedOrigins: ['http://localhost:3000'],
+        allowedOrigins: ['http://localhost:3000', ...webOrigins(this)],
         allowedHeaders: ['*'],
       }],
     });

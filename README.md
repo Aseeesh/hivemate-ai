@@ -88,7 +88,15 @@ The account is in the SES sandbox: the sender and every recipient must be verifi
 If SES refuses a send, the draft stays `PENDING_APPROVAL` with the error shown, and nothing is lost.
 Inbound mail (SES receiving) needs a domain you control and is not set up yet.
 
-## Dashboard
+## Hosted dashboard
+
+The dashboard is a static export served from a private S3 bucket through CloudFront (HTTPS, security headers incl. CSP, direct bucket access denied):
+**https://d3skf5nh4g91r9.cloudfront.net** (dev backend; default CloudFront domain, no custom domain yet).
+Publish a new build with `AWS_PROFILE=hivemate scripts/deploy-web.sh` (reads the stack outputs, builds, syncs, invalidates).
+The API and docs-bucket CORS allow this origin via `-c webOrigin=...` (set in `infra/cdk.json`). Verified without signing in: page and route
+rendering, headers, CORS (an unknown origin gets no allow header). Sign-in on the hosted site has not been exercised by me.
+
+## Dashboard (local)
 
 ```bash
 cd web && npm install
