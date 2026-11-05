@@ -30,7 +30,7 @@ def handler(event, _context):
 
         if (method, path) == ("GET", "/me"):
             meta = db.table().get_item(Key={"PK": ctx.pk, "SK": "META"}).get("Item", {})
-            return _resp(200, {"user": {"id": ctx.user_id, "email": ctx.email, "role": ctx.role}, "tenant": db.clean(meta)})
+            return _resp(200, {"user": {"id": ctx.user_id, "email": ctx.email, "role": ctx.role, "platform": ctx.platform}, "tenant": db.clean(meta)})
 
         if (method, path) == ("GET", "/plugins"):
             installed = {i["SK"].split("#", 1)[1]: i for i in db.query_prefix(ctx.pk, "PLUGIN#")}

@@ -6,6 +6,7 @@ import re
 import boto3
 from botocore.config import Config
 
+from src.common import db
 from src.common.context import Ctx
 
 # SigV4 + regional endpoint: required for presigned uploads into a KMS-encrypted bucket.
@@ -52,12 +53,14 @@ def list_documents(ctx: Ctx) -> dict:
         {"name": o["Key"][len(_prefix(ctx)):], "size": o["Size"], "modified": o["LastModified"].isoformat()}
         for o in res.get("Contents", []) if not o["Key"].endswith(META_SUFFIX)
     ]
-    jobs = agent.list_ingestion_jobs(
-        knowledgeBaseId=os.environ["KNOWLEDGE_BASE_ID"], dataSourceId=os.environ["DATA_SOURCE_ID"],
-        sortBy={"attribute": "STARTED_AT", "order": "DESCENDING"}, maxResults=1,
-    )["ingestionJobSummaries"]
-    last = jobs[0] if jobs else None
-    return {"documents": docs, "lastSync": last and {"status": last["status"], "startedAt": last["startedAt"].isoformat()}}
+    # The data source is shared, so "the latest job" would be another business's. Track this tenant's own last job.
+    mine = db.table().get_item(Key={"PK": ctx.pk, "SK": "SYNC#latest"}).get("Item")
+    last = None
+    if mine:
+        job = agent.get_ingestion_job(knowledgeBaseId=os.environ["KNOWLEDGE_BASE_ID"], dataSourceId=os.environ["DATA_SOURCE_ID"],
+                                      ingestionJobId=mine["jobId"])["ingestionJob"]
+        last = {"status": job["status"], "startedAt": job["startedAt"].isoformat()}
+    return {"documents": docs, "lastSync": last}
 
 
 def delete_document(ctx: Ctx, name: str) -> None:
@@ -71,4 +74,5 @@ def start_sync(ctx: Ctx) -> dict:
     job = agent.start_ingestion_job(
         knowledgeBaseId=os.environ["KNOWLEDGE_BASE_ID"], dataSourceId=os.environ["DATA_SOURCE_ID"],
     )["ingestionJob"]
+    db.table().put_item(Item={"PK": ctx.pk, "SK": "SYNC#latest", "jobId": job["ingestionJobId"]})
     return {"jobId": job["ingestionJobId"], "status": job["status"]}

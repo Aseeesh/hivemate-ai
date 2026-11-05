@@ -88,6 +88,19 @@ The account is in the SES sandbox: the sender and every recipient must be verifi
 If SES refuses a send, the draft stays `PENDING_APPROVAL` with the error shown, and nothing is lost.
 Inbound mail (SES receiving) needs a domain you control and is not set up yet.
 
+## Platform console (super admin)
+
+A separate operator console at `/platform/` for members of the Cognito group `platform-admins`. **Read-only, metadata only:** business list,
+usage counts (users, plugins, conversations, leads, emails held), channel status, document counts, recent action names. It never returns customer
+messages, lead details, plugin settings or site keys. Each look at one business is written to that business's audit log (`platform.viewed_tenant`).
+Membership is granted only by an operator with the AWS CLI (browsers cannot set it):
+
+```bash
+aws cognito-idp admin-add-user-to-group --user-pool-id <UserPoolId> --username <email> --group-name platform-admins
+```
+The user must sign in again to get a token with the group. Business admins calling `/platform/*` get 403 (unit-tested); signed-out callers get 401.
+Counts come from a table scan: fine at this stage, replace with maintained counters before hundreds of businesses.
+
 ## Hosted dashboard
 
 The dashboard is a static export served from a private S3 bucket through CloudFront (HTTPS, security headers incl. CSP, direct bucket access denied):

@@ -140,6 +140,13 @@ export class ApiStack extends cdk.Stack {
     props.table.grantReadWriteData(chatFn);
     aiPolicies.forEach((st) => chatFn.addToRolePolicy(st));
 
+    // Platform console (super admin): read-only metadata across businesses. Own Lambda so it holds no AI/mail permissions.
+    const platformFn = new lambda.Function(this, 'PlatformFn', {
+      ...common, handler: 'src.api.platform.handler', timeout: cdk.Duration.seconds(29), memorySize: 256,
+    });
+    props.table.grantReadWriteData(platformFn); // writes only the platform.viewed_tenant audit row
+    platformFn.addToRolePolicy(new iam.PolicyStatement({ actions: ['s3:ListBucket'], resources: [props.docsBucket.bucketArn] }));
+
     // WhatsApp text adapter: AWS End User Messaging Social -> SNS -> this Lambda (subscription is made by the owner, see README).
     const whatsappFn = new lambda.Function(this, 'WhatsAppFn', {
       ...common, handler: 'src.channels.whatsapp.handler', timeout: cdk.Duration.seconds(60), memorySize: 512, environment: aiEnv,
@@ -180,6 +187,9 @@ export class ApiStack extends cdk.Stack {
      ['/leads', [apigwv2.HttpMethod.GET]], ['/channels/whatsapp', [apigwv2.HttpMethod.PUT]],
      ['/channels/web', [apigwv2.HttpMethod.GET, apigwv2.HttpMethod.PUT]],
     ].forEach(([path, methods]) => api.addRoutes({ path: path as string, methods: methods as apigwv2.HttpMethod[], integration: chatInt }));
+    const platformInt = new HttpLambdaIntegration('PlatformInt', platformFn);
+    ['/platform/overview', '/platform/tenants', '/platform/tenants/{id}']
+      .forEach((path) => api.addRoutes({ path, methods: [apigwv2.HttpMethod.GET], integration: platformInt }));
     api.addRoutes({
       path: '/{proxy+}',
       methods: [apigwv2.HttpMethod.GET, apigwv2.HttpMethod.POST, apigwv2.HttpMethod.PUT, apigwv2.HttpMethod.DELETE, apigwv2.HttpMethod.PATCH],

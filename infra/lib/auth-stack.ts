@@ -48,6 +48,11 @@ export class AuthStack extends cdk.Stack {
       removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
 
+    // Operators (not businesses) belong here. Only an AWS admin can add a user (AdminAddUserToGroup); no browser path exists.
+    new cognito.CfnUserPoolGroup(this, 'PlatformAdmins', {
+      userPoolId: this.userPool.userPoolId, groupName: 'platform-admins', description: 'Hivemate operators: read-only view across businesses',
+    });
+
     this.userPoolClient = this.userPool.addClient('WebClient', {
       authFlows: { userSrp: true },
       generateSecret: false,

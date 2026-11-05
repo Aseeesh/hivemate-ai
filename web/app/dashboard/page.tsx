@@ -33,7 +33,10 @@ export default function Dashboard() {
           <h1>{me?.tenant.name ?? 'Hivemate'}</h1>
           <span className="muted">{me ? `${me.user.email} · ${me.user.role} · ${me.tenant.timezone}` : 'Loading…'}</span>
         </div>
-        <button className="btn" onClick={() => { signOut(); router.replace('/'); }}>Sign out</button>
+        <div className="row">
+          {me?.user.platform && <a className="btn" href="/platform/">Platform console</a>}
+          <button className="btn" onClick={() => { signOut(); router.replace('/'); }}>Sign out</button>
+        </div>
       </header>
       {error && <p className="err" role="alert">{error}. If you just signed up, sign out and sign in again.</p>}
       <nav className="tabs" role="tablist">
