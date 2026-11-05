@@ -12,7 +12,7 @@ import uuid
 import boto3
 from botocore.exceptions import ClientError
 
-from src.common import db, mailer
+from src.common import db, llmlog, mailer
 from src.common.knowledge import NO_KNOWLEDGE, retrieve
 
 bedrock = boto3.client("bedrock-runtime")
@@ -84,10 +84,12 @@ Rules:
 # ---------- guardrail (applied explicitly: works the same with or without tool use) ----------
 def guard(text: str, source: str) -> tuple[bool, str]:
     """Returns (intervened, text_to_use)."""
+    t0 = time.time()
     res = bedrock.apply_guardrail(
         guardrailIdentifier=os.environ["GUARDRAIL_ID"], guardrailVersion=os.environ["GUARDRAIL_VERSION"],
         source=source, content=[{"text": {"text": text}}],
     )
+    llmlog.emit("guardrail_call", "conversation", t0, source=source, action=res["action"])
     if res["action"] == "GUARDRAIL_INTERVENED":
         outs = res.get("outputs") or []
         return True, outs[0]["text"] if outs and source == "OUTPUT" else ""
@@ -163,8 +165,8 @@ def call_model(system: str, msgs: list[dict], tools: dict) -> dict:
     """One retry for transient failures (Nova Lite sometimes emits a malformed tool call)."""
     for attempt in (1, 2):
         try:
-            return bedrock.converse(modelId=os.environ["BEDROCK_MODEL_ID"], system=[{"text": system}], messages=msgs, toolConfig=tools,
-                                    inferenceConfig={"maxTokens": 300, "temperature": 0.3})
+            return llmlog.converse(bedrock, "conversation", modelId=os.environ["BEDROCK_MODEL_ID"], system=[{"text": system}], messages=msgs,
+                                   toolConfig=tools, inferenceConfig={"maxTokens": 300, "temperature": 0.3})
         except ClientError as e:
             if attempt == 2 or e.response["Error"]["Code"] not in TRANSIENT:
                 raise
@@ -203,8 +205,8 @@ def summarise(pk: str, conv_id: str, collected: dict) -> str:
     # Customer words only: when the assistant's polite replies were included, the summary turned "the team will be in touch" into "booking confirmed".
     transcript = "\n".join(f"Customer: {t['text']}" for t in turns if t["role"] == "user")
     try:
-        res = bedrock.converse(
-            modelId=os.environ["BEDROCK_MODEL_ID"],
+        res = llmlog.converse(
+            bedrock, "summary", modelId=os.environ["BEDROCK_MODEL_ID"],
             system=[{"text": "Summarise this customer conversation for the business owner in at most 4 short bullet lines: what they want, urgency, and anything unresolved. Plain text only. Use only facts the customer stated. Nothing has been booked, confirmed or agreed: the team has not yet replied, so never write that a booking or service was confirmed. Do not infer or combine details (for example do not attach a property size to a different service), and do not say anything was confirmed or agreed unless the transcript says so."}],
             messages=[{"role": "user", "content": [{"text": f"<transcript>\n{transcript}\n</transcript>\nCollected: {json.dumps(collected)}"}]}],
             inferenceConfig={"maxTokens": 250, "temperature": 0.1})
@@ -242,6 +244,7 @@ def notify_owner(pk: str, business: str, cfg: dict, kind: str, lead: dict, summa
 # ---------- entry point ----------
 def handle_message(tenant_id: str, text: str, channel: str, customer: str, conv_id: str | None = None, customer_name: str = "") -> dict:
     pk = f"TENANT#{tenant_id}"
+    llmlog.set_tenant(tenant_id)
     plugin = db.table().get_item(Key={"PK": pk, "SK": "PLUGIN#conversation-agent"}).get("Item")
     if not plugin:
         raise NotInstalled("conversation-agent plugin not installed")

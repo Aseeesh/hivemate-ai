@@ -72,6 +72,14 @@ Guardrail is applied to every customer message and every reply; the model's reas
 `tests/eval/agent_eval.py` runs 22 behaviour cases (answers match the documents, no invented prices, details captured, handoff, injection, privacy,
 summary honesty) three times each against the deployed stack and reports pass rates. Results and model comparison: `docs/EVAL.md`.
 
+## Monitoring models with LLMScope
+
+Every Bedrock call writes one metadata-only log line (`src/common/llmlog.py`: model, tokens, latency, stop reason, hashed tenant; **never message text**).
+`tools/llmscope_ship.py` pulls those lines from CloudWatch and sends them as OTLP spans and metrics to a local
+[LLMScope](https://github.com/Aseeesh/llmscope) stack (Grafana). It pulls from your laptop, so the Lambdas need no public endpoint or extra dependency.
+LLMScope's own SDK/proxy do not support Bedrock, which is why the OTLP path is used. Cost uses estimated Nova prices in the script; verify them.
+Verified: token and cost counters in Prometheus and spans in Tempo. Manual or `--watch`; not an always-on pipeline.
+
 ## Email sending
 
 Replies go out through SES from `SENDER_EMAIL` (CDK context `-c senderEmail=...`), with the business name as the display name.

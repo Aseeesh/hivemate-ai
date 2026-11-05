@@ -7,7 +7,7 @@ import time
 import boto3
 from botocore.exceptions import ClientError
 
-from src.common import db, mailer
+from src.common import db, llmlog, mailer
 from src.common.knowledge import NO_KNOWLEDGE, retrieve
 
 bedrock = boto3.client("bedrock-runtime")
@@ -27,8 +27,8 @@ Respond with ONLY a JSON object:
 
 
 def draft(msg: dict, config: dict, knowledge: str) -> dict:
-    res = bedrock.converse(
-        modelId=os.environ["BEDROCK_MODEL_ID"],
+    res = llmlog.converse(
+        bedrock, "email", modelId=os.environ["BEDROCK_MODEL_ID"],
         system=[{"text": SYSTEM.format(tone=config["businessTone"])}],
         messages=[{"role": "user", "content": [{"text": (
             f"<knowledge>\n{knowledge}\n</knowledge>\n"
@@ -57,6 +57,7 @@ def draft(msg: dict, config: dict, knowledge: str) -> dict:
 
 def process(detail: dict) -> None:
     tenant_id, message_id = detail["tenantId"], detail["messageId"]
+    llmlog.set_tenant(tenant_id)
     pk = f"TENANT#{tenant_id}"
     plugin = db.table().get_item(Key={"PK": pk, "SK": "PLUGIN#email-automation"}).get("Item")
     if not plugin:

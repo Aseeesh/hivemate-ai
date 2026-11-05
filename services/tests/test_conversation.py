@@ -149,3 +149,32 @@ def test_wrapper_tags_are_stripped_from_replies():
     assert agent.strip_reasoning("<response> Hello there </response>") == "Hello there"
     assert agent.strip_reasoning("<message>Hi</message>") == "Hi"
     assert agent.strip_reasoning("<thinking>x</thinking>Hi") == "Hi"
+
+
+def test_llm_call_log_has_metadata_but_no_message_text(capsys):
+    from src.common import llmlog
+
+    class Fake:
+        def converse(self, **kw):
+            return {"usage": {"inputTokens": 120, "outputTokens": 40}, "stopReason": "end_turn", "output": {"message": {"content": [{"text": "secret reply"}]}}}
+
+    llmlog.set_tenant("abc123")
+    llmlog.converse(Fake(), "conversation", modelId="m", messages=[{"role": "user", "content": [{"text": "my phone is 0211234567"}]}])
+    line = capsys.readouterr().out
+    rec = json.loads(line)
+    assert rec["event"] == "llm_call" and rec["inputTokens"] == 120 and rec["outputTokens"] == 40 and rec["model"] == "m"
+    assert "0211234567" not in line and "secret reply" not in line and "abc123" not in line and len(rec["tenant"]) == 10
+
+
+def test_llm_call_failure_is_logged_and_reraised(capsys):
+    import pytest
+    from botocore.exceptions import ClientError
+    from src.common import llmlog
+
+    class Boom:
+        def converse(self, **kw):
+            raise ClientError({"Error": {"Code": "ThrottlingException"}}, "Converse")
+
+    with pytest.raises(ClientError):
+        llmlog.converse(Boom(), "email", modelId="m")
+    assert json.loads(capsys.readouterr().out)["error"] == "ThrottlingException"
