@@ -31,3 +31,20 @@ Both projects were tested from a clean state: Hivemate on the deployed ap-southe
 - Hivemate on a real WhatsApp number (simulated only); voice calling (not built); the dashboard is local only.
 - LLMScope: red-team package is a skeleton. (Hivemate log lines were added to Log Search afterwards: 109 model calls backfilled, verified in Loki and in the dashboard.)
 - Model cost uses estimated Nova prices.
+
+## Hosted site, browser check (6 Nov 2026, business admin signed in by the owner)
+| Check | Result |
+|---|---|
+| Sign-in and profile from the CloudFront origin | works |
+| Inbox, Agent, Plugins, Documents, Audit tabs load real data, no console errors | works |
+| Business admin opening `/platform/` is redirected to `/dashboard/`, no "Platform console" button | works |
+| Install Conversation Agent from the Plugins tab | works |
+| Test chat: honest "no details yet" answer, lead captured (name, phone, need), marked COMPLETE | works |
+| AI summary no longer claims anything was confirmed | works |
+| Audit tab shows plugin.configured, conversation.turn, owner.notified.lead | works |
+| Documents "last sync" is the business's own (shows "never") | fixed and verified |
+
+Found: the owner alert email failed (`MessageRejected`, address not verified): SES is in sandbox, so alerts only reach verified addresses.
+Found: a place name ("Hamilton") was stored in `need`, not `location` (known gap).
+
+Not yet verified: the super admin console in a browser and the authenticated `tests/e2e/console_e2e.py` run (need the owner's passwords and a member in `platform-admins`); document upload and the Inbox test email on the hosted site.
