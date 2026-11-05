@@ -11,7 +11,7 @@
 - [ ] Link a real WhatsApp number and verify the text adapter live
 - [ ] WhatsApp voice agent (docs/VOICE.md)
 - [x] Public website chat widget (site key, origin allow-list, rate limits) so customers can use the agent without signing in
-- [ ] AI evaluation suite (known gaps: a stated location was not recorded; summaries can overstate, e.g. "confirmed the booking")
+- [x] AI evaluation suite (22 cases x 3 runs, `tests/eval/`); remaining gap: a stated location is sometimes left out of the tool call
 - [ ] Auto-sync KB on upload (S3 event -> debounced ingestion); Document Analysis plugin (Textract + Bedrock)
 - [ ] AI evaluation suite: golden questions per tenant, check grounding, no cross-tenant leakage, no invented facts
 - [x] Next.js dashboard (Cognito SRP login + signup confirm, plugin catalog/config, documents, inbox approval queue, audit)

@@ -6,6 +6,6 @@
     "alertEmail": "",
     "senderEmail": "",
     "monthlyBudgetUsd": 20,
-    "bedrockModelId": "apac.amazon.nova-lite-v1:0"
+    "bedrockModelId": "apac.amazon.nova-pro-v1:0"
   }
 }

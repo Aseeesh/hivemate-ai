@@ -109,3 +109,43 @@ def test_reasoning_only_reply_is_nudged_once(monkeypatch):
     os.environ["BEDROCK_MODEL_ID"] = "m"
     state = {"collected": {}}
     assert agent.converse_loop("s", [], "hi", agent.tool_config(["name"]), state, ["name"]) == "Hello Sam!"
+
+
+def test_summary_is_built_from_customer_words_only(monkeypatch):
+    sent = {}
+    monkeypatch.setattr(agent.db, "query_prefix", lambda *a, **k: [
+        {"role": "user", "text": "I need a clean in Albany"}, {"role": "assistant", "text": "We'll get your clean sorted"}])
+
+    def fake_converse(**kw):
+        sent.update(kw)
+        return {"output": {"message": {"content": [{"text": "- wants a clean"}]}}}
+
+    monkeypatch.setattr(agent.bedrock, "converse", fake_converse)
+    monkeypatch.setenv("BEDROCK_MODEL_ID", "m")
+    assert agent.summarise("TENANT#x", "c1", {}) == "- wants a clean"
+    body = sent["messages"][0]["content"][0]["text"]
+    assert "Albany" in body and "sorted" not in body
+    assert "never write that a booking" in sent["system"][0]["text"]
+
+
+def test_identifiers_must_be_grounded_in_customer_words():
+    said = "hi, i need a clean. i'm sam taylor, 021 123 4567".lower()
+    assert agent.accept("name", "Sam Taylor", said)
+    assert not agent.accept("name", "Hi", said)           # greeting recorded as a name
+    assert not agent.accept("name", "Jordan Smith", said)  # never said
+    assert agent.accept("phone", "0211234567", said)       # formatting differs, digits match
+    assert not agent.accept("phone", "0219999999", said)
+    assert agent.accept("need", "carpet cleaning", said)   # free-text fields are not policed
+    assert agent.accept("name", "Anything", None)          # no transcript available: do not block
+
+
+def test_record_details_drops_ungrounded_name():
+    state = {"collected": {}, "said": "hello i need a quote"}
+    agent.run_tool("record_details", {"name": "Hello", "need": "a quote"}, state, ["name", "need"])
+    assert state["collected"] == {"need": "a quote"}
+
+
+def test_wrapper_tags_are_stripped_from_replies():
+    assert agent.strip_reasoning("<response> Hello there </response>") == "Hello there"
+    assert agent.strip_reasoning("<message>Hi</message>") == "Hi"
+    assert agent.strip_reasoning("<thinking>x</thinking>Hi") == "Hi"

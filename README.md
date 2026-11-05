@@ -38,7 +38,7 @@ python -m pytest services/tests
 ```
 
 Bedrock models must be enabled in the console (Bedrock > Model access) in the deploy region.
-Default model: `apac.amazon.nova-lite-v1:0` (cheap; change in `infra/cdk.json`).
+Default model: `apac.amazon.nova-pro-v1:0` (change in `infra/cdk.json`). It scored 94% on the agent evaluation versus 89% for Nova Lite, see `docs/EVAL.md`.
 
 ## API
 
@@ -66,6 +66,11 @@ Guardrail is applied to every customer message and every reply; the model's reas
   Replies never include captured lead data. Keys can be rotated. Live-tested (`tests/e2e/public_chat_e2e.py`, 25 checks) and the widget
   was exercised in a real browser. See `docs/widget-demo.html`.
 - Voice: see `docs/VOICE.md`.
+
+## Agent evaluation
+
+`tests/eval/agent_eval.py` runs 22 behaviour cases (answers match the documents, no invented prices, details captured, handoff, injection, privacy,
+summary honesty) three times each against the deployed stack and reports pass rates. Results and model comparison: `docs/EVAL.md`.
 
 ## Email sending
 
