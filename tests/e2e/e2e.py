@@ -3,7 +3,7 @@
 Usage (needs `pip install boto3 requests pycognito`, AWS credentials, and a verified SES sender):
   AWS_PROFILE=hivemate E2E_USER_POOL_ID=... E2E_CLIENT_ID=... E2E_API_URL=... E2E_VERIFIED_EMAIL=you@example.com python tests/e2e/e2e.py
 Sends two real emails to E2E_VERIFIED_EMAIL. Takes about 6 minutes (the dead-letter-queue check waits out SQS retries).
-Note: the load check assumes the Lambda concurrency quota allows 20 parallel requests; a new account's quota is 10.
+Note: the load check uses 8 parallel requests because a new account's Lambda concurrency quota is 10 (more would be throttled with 503).
 """
 import os
 import json, secrets, statistics, string, sys, time, datetime as dt
@@ -168,10 +168,10 @@ check("A's audit covers the full lifecycle", {"tenant.created", "plugin.configur
 check("A's audit contains none of B's data", TB not in json.dumps(aud) and not any(m["SK"][4:] in json.dumps(aud) for m in MB.values()))
 
 # ---- 9. load
-print("== 9. Load (60 requests, 20 concurrent, authenticated GET /plugins)")
+print("== 9. Load (60 requests, 8 concurrent, authenticated GET /plugins)")
 def hit(_):
     t = time.time(); r = requests.get(API + "/plugins", headers=A["H"], timeout=30); return r.status_code, (time.time() - t) * 1000
-with ThreadPoolExecutor(20) as ex: out = list(ex.map(hit, range(60)))
+with ThreadPoolExecutor(8) as ex: out = list(ex.map(hit, range(60)))
 lat = sorted(x[1] for x in out)
 check("load: all 60 requests succeed", all(x[0] == 200 for x in out), [x[0] for x in out if x[0] != 200])
 print(f"   latency ms  p50={statistics.median(lat):.0f}  p95={lat[int(len(lat)*.95)-1]:.0f}  max={lat[-1]:.0f}")
@@ -180,12 +180,13 @@ check("load: p95 under 1.5 s", lat[int(len(lat) * .95) - 1] < 1500, f"{lat[int(l
 # ---- 10. DLQ
 print("== 10. Reliability: poison message must end up in the dead-letter queue")
 qurl = [u for u in sqs.list_queues()["QueueUrls"] if "EmailDlq" in u][0]
-found = None
-for _ in range(32):
-    r = sqs.receive_message(QueueUrl=qurl, MaxNumberOfMessages=10, WaitTimeSeconds=15, VisibilityTimeout=0, AttributeNames=["ApproximateReceiveCount"])
+found, deadline = None, time.time() + 480  # 3 receives x 120 s visibility timeout is about 4-5 minutes
+while time.time() < deadline and not found:
+    r = sqs.receive_message(QueueUrl=qurl, MaxNumberOfMessages=10, WaitTimeSeconds=5, VisibilityTimeout=30, AttributeNames=["ApproximateReceiveCount"])
     for m in r.get("Messages", []):
-        if poison_id in m["Body"]: found = m; break
-    if found: break
+        if poison_id in m["Body"]: found = m
+        elif '"poison"' in m["Body"]: sqs.delete_message(QueueUrl=qurl, ReceiptHandle=m["ReceiptHandle"])  # debris from an earlier run; it would keep the alarm firing
+    if not r.get("Messages"): time.sleep(5)
 check("poison message reached the DLQ after retries", found is not None, f"waited {time.time()-T0:.0f}s total")
 if found:
     check("it was received 3 times before moving", True, f"approx receive count at DLQ: {found['Attributes'].get('ApproximateReceiveCount')}")
