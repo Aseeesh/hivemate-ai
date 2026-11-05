@@ -29,5 +29,5 @@ Both projects were tested from a clean state: Hivemate on the deployed ap-southe
 
 ## Not covered
 - Hivemate on a real WhatsApp number (simulated only); voice calling (not built); the dashboard is local only.
-- LLMScope: Hivemate's Loki log panel has no Hivemate lines (only spans and metrics are shipped); red-team package is a skeleton.
+- LLMScope: red-team package is a skeleton. (Hivemate log lines were added to Log Search afterwards: 109 model calls backfilled, verified in Loki and in the dashboard.)
 - Model cost uses estimated Nova prices.

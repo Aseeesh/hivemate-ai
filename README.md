@@ -78,7 +78,8 @@ Every Bedrock call writes one metadata-only log line (`src/common/llmlog.py`: mo
 `tools/llmscope_ship.py` pulls those lines from CloudWatch and sends them as OTLP spans and metrics to a local
 [LLMScope](https://github.com/Aseeesh/llmscope) stack (Grafana). It pulls from your laptop, so the Lambdas need no public endpoint or extra dependency.
 LLMScope's own SDK/proxy do not support Bedrock, which is why the OTLP path is used. Cost uses estimated Nova prices in the script; verify them.
-Verified: token and cost counters in Prometheus and spans in Tempo. Manual or `--watch`; not an always-on pipeline.
+It also sends each call as an OTLP log record, so Hivemate shows up in LLMScope's **Log Search** (and its calls-per-minute chart); each log line shares its trace id with the span. `--logs-only` backfills history without double-counting metrics.
+Verified: token and cost counters in Prometheus, spans in Tempo, and log lines in Loki. Manual or `--watch`; not an always-on pipeline.
 
 ## Email sending
 

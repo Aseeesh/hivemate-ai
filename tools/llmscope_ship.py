@@ -3,11 +3,11 @@
     AWS_PROFILE=hivemate python tools/llmscope_ship.py --since 120            # one pass
     AWS_PROFILE=hivemate python tools/llmscope_ship.py --watch                # keep shipping every 30 s
 
-Reads only the metadata log lines written by services/src/common/llmlog.py (model, tokens, latency, hashed tenant).
+Sends spans, metrics and log records (shown in LLMScope Log Search). Reads only the metadata log lines written by services/src/common/llmlog.py (model, tokens, latency, hashed tenant).
 No message text exists in those lines, so nothing customer-written is sent. Needs: boto3, requests.
 The Lambdas send nothing anywhere; this script pulls, so no public endpoint or extra Lambda dependency is needed.
 """
-import argparse, json, os, secrets, time
+import argparse, hashlib, json, os, time
 import boto3, requests
 
 LOG_GROUP_PREFIX = "/aws/lambda/hivemate-dev-api-"
@@ -29,7 +29,31 @@ def ns(ms: float) -> str:
     return str(int(ms * 1_000_000))
 
 
-def span(rec: dict, end_ms: int) -> dict:
+def ids(event_id: str) -> tuple[str, str]:
+    """Stable ids from the CloudWatch event id: re-shipping the same event is idempotent, and its log line links to its span."""
+    h = hashlib.sha256(event_id.encode()).hexdigest()
+    return h[:32], h[32:48]
+
+
+def logrec(rec: dict, end_ms: int, event_id: str) -> dict:
+    """One OTLP log record. Body starts with 'llm_call' because LLMScope's Log Search and calls-per-minute panel match on it."""
+    tid, sid = ids(event_id)
+    if rec["event"] == "guardrail_call":
+        body, attrs = f"guardrail_call {rec.get('source', '')} {rec.get('action', '')}", [attr("hivemate.guardrail.action", rec.get("action", ""))]
+        sev = ("WARN", 13) if rec.get("action") != "NONE" else ("INFO", 9)
+    else:
+        m = rec.get("model", "unknown")
+        body = f"llm_call {m}" + (f" failed: {rec['error']}" if rec.get("error") else "")
+        attrs = [attr("gen_ai.provider.name", rec.get("provider", "aws.bedrock")), attr("gen_ai.request.model", m),
+                 attr("gen_ai.usage.input_tokens", rec.get("inputTokens", 0)), attr("gen_ai.usage.output_tokens", rec.get("outputTokens", 0)),
+                 attr("hivemate.latency_ms", rec.get("latencyMs", 0)), attr("hivemate.stop_reason", rec.get("stopReason", ""))]
+        sev = ("ERROR", 17) if rec.get("error") else ("INFO", 9)
+    attrs += [attr("hivemate.component", rec.get("component", "")), attr("hivemate.tenant", rec.get("tenant", ""))]
+    return {"timeUnixNano": ns(end_ms), "observedTimeUnixNano": ns(end_ms), "severityText": sev[0], "severityNumber": sev[1],
+            "body": {"stringValue": body}, "attributes": attrs, "traceId": tid, "spanId": sid}
+
+
+def span(rec: dict, end_ms: int, event_id: str) -> dict:
     start_ms = end_ms - rec.get("latencyMs", 0)
     if rec["event"] == "guardrail_call":
         name, attrs = f"guardrail {rec.get('source', '')}", [attr("hivemate.guardrail.action", rec.get("action", ""))]
@@ -44,7 +68,8 @@ def span(rec: dict, end_ms: int) -> dict:
         if rec.get("error"): attrs.append(attr("error.type", rec["error"]))
         name = f"{rec.get('operation', 'chat')} {m}"
     attrs += [attr("hivemate.component", rec.get("component", "")), attr("hivemate.tenant", rec.get("tenant", ""))]
-    return {"traceId": secrets.token_hex(16), "spanId": secrets.token_hex(8), "name": name, "kind": 3,
+    tid, sid = ids(event_id)
+    return {"traceId": tid, "spanId": sid, "name": name, "kind": 3,
             "startTimeUnixNano": ns(start_ms), "endTimeUnixNano": ns(end_ms), "attributes": attrs,
             "status": {"code": 2 if rec.get("error") else 1}}
 
@@ -60,17 +85,21 @@ def fetch(logs, since_ms: int, seen: set):
                 seen.add(e["eventId"])
                 try: rec = json.loads(e["message"])
                 except ValueError: continue
-                if rec.get("event") in ("llm_call", "guardrail_call"): out.append((rec, e["timestamp"]))
+                if rec.get("event") in ("llm_call", "guardrail_call"): out.append((rec, e["timestamp"], e["eventId"]))
             if "nextToken" not in r: break
             kw["nextToken"] = r["nextToken"]
     return out
 
 
-def ship(endpoint: str, events: list, totals: dict, started_ms: int) -> None:
+def ship(endpoint: str, events: list, totals: dict, started_ms: int, logs_only: bool = False) -> None:
     res = {"attributes": [attr("service.name", "hivemate"), attr("deployment.environment", "dev")]}  # capture_content deliberately not set
-    spans = [span(r, ts) for r, ts in events]
+    logs = [logrec(r, ts, eid) for r, ts, eid in events]
+    requests.post(f"{endpoint}/v1/logs", json={"resourceLogs": [{"resource": res, "scopeLogs": [{"scope": {"name": "hivemate-ship"}, "logRecords": logs}]}]}, timeout=20).raise_for_status()
+    if logs_only:
+        return
+    spans = [span(r, ts, eid) for r, ts, eid in events]
     requests.post(f"{endpoint}/v1/traces", json={"resourceSpans": [{"resource": res, "scopeSpans": [{"scope": {"name": "hivemate-ship"}, "spans": spans}]}]}, timeout=20).raise_for_status()
-    for r, _ in events:
+    for r, _, _ in events:
         if r["event"] != "llm_call" or r.get("error"): continue
         m, p = r.get("model", "unknown"), r.get("provider", "aws.bedrock")
         pi, po = price(m)
@@ -92,6 +121,7 @@ def main():
     ap.add_argument("--endpoint", default=os.environ.get("LLMSCOPE_OTLP", "http://localhost:4318"))
     ap.add_argument("--since", type=int, default=60, help="minutes of history on the first pass")
     ap.add_argument("--watch", action="store_true")
+    ap.add_argument("--logs-only", action="store_true", help="send only log records (backfill without double-counting metrics)")
     a = ap.parse_args()
     logs = boto3.Session(profile_name=os.environ.get("AWS_PROFILE"), region_name="ap-southeast-2").client("logs")
     seen, totals, started = set(), {"tok": {}, "cost": {}}, int(time.time() * 1000)
@@ -99,9 +129,9 @@ def main():
     while True:
         events = fetch(logs, since, seen)
         if events:
-            ship(a.endpoint, events, totals, started)
-            since = max(ts for _, ts in events) - 1000
-        print(f"shipped {len(events)} events ({sum(1 for r, _ in events if r['event'] == 'llm_call')} model calls)", flush=True)
+            ship(a.endpoint, events, totals, started, a.logs_only)
+            since = max(ts for _, ts, _ in events) - 1000
+        print(f"shipped {len(events)} events ({sum(1 for r, _, _ in events if r['event'] == 'llm_call')} model calls)", flush=True)
         if not a.watch: break
         time.sleep(30)
 
