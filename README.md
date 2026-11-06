@@ -67,6 +67,10 @@ Guardrail is applied to every customer message and every reply; the model's reas
   was exercised in a real browser. See `docs/widget-demo.html`.
 - Voice: see `docs/VOICE.md`.
 
+## AI harness
+
+Context and memory, tools, security and evaluation around the model are mapped in [docs/HARNESS.md](docs/HARNESS.md): session/state/long-term memory, untrusted-context handling, and a three-level evaluation (checks, LLM judge, human review sheet).
+
 ## Agent evaluation
 
 `tests/eval/agent_eval.py` runs 22 behaviour cases (answers match the documents, no invented prices, details captured, handoff, injection, privacy,

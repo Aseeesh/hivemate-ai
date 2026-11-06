@@ -1,0 +1,20 @@
+# LLMScope config for Hivemate. Run from this folder:  AWS_PROFILE=hivemate llmscope-ship --since 120
+project: hivemate
+endpoint: http://localhost:4318      # local LLMScope Docker stack
+environment: dev
+cloudwatch:
+  region: ap-southeast-2
+  logGroupPrefix: /aws/lambda/hivemate-dev-api-
+  filter: '{ $.app = "hivemate" }'
+  attributes: [component, tenant]    # tenant is already hashed by services/src/common/llmlog.py
+  attributePrefix: hivemate
+
+# Red team the public website chat. The site key is NOT stored here: pass it on the command line
+#   llmscope redteam run --no-record --target-url "<PublicChatUrl>/chat?key=pk_..."
+redteam:
+  target:
+    url: https://bb0dozv2lk.execute-api.ap-southeast-2.amazonaws.com/chat
+    inputField: message
+    outputField: reply
+    timeoutMs: 60000
+  attacks: [prompt_injection, jailbreak, pii_leak]   # tool_misuse needs a tool-call field the chat API does not return

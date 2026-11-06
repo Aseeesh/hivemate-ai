@@ -3,11 +3,13 @@
 Unlike the e2e suites (does it work?), this measures how well the model behaves. Every case is run REPEATS times because
 the model is not deterministic; a case passes only if its check passes. Output: per-case pass rate, JSON report.
 
-Env: E2E_USER_POOL_ID, E2E_CLIENT_ID, E2E_API_URL. Optional: EVAL_REPEATS (default 3), EVAL_REPORT (path).
+Env: E2E_USER_POOL_ID, E2E_CLIENT_ID, E2E_API_URL. Optional: EVAL_REPEATS (default 3), EVAL_REPORT (path), EVAL_JUDGE=0 to skip the LLM judge, JUDGE_MODEL, EVAL_REVIEW (path of the human review sheet).
 Cost: roughly 150 Nova Lite conversations turns plus guardrail calls (a few cents). Takes ~8 minutes. Sends no email.
 """
 import json, os, re, secrets, string, sys, time, boto3, requests
 from pycognito import Cognito
+sys.path.insert(0, os.path.dirname(__file__))
+from judge import judge, low
 
 POOL, CLIENT, API = os.environ["E2E_USER_POOL_ID"], os.environ["E2E_CLIENT_ID"], os.environ["E2E_API_URL"]
 REPEATS = int(os.environ.get("EVAL_REPEATS", "3"))
@@ -91,13 +93,17 @@ CASES = [
      lambda r, l: (lambda sm: (not has(sm, "confirmed", "booked", "scheduled for") and len(sm) > 15, sm))(lead_for(l["cid"]).get("summary", ""))),
 ]
 
-results, t0 = [], time.time()
+JUDGE = os.environ.get("EVAL_JUDGE", "1") != "0"
+results, judged, t0 = [], [], time.time()
 for name, turns, check in CASES:
     passes, notes = 0, []
     for i in range(REPEATS):
         try:
             replies, last = convo(turns)
             ok, why = check(replies, last)
+            if JUDGE and i == 0 and replies and not replies[-1].startswith("<<HTTP"):  # level 2: judge one run per case, to bound cost
+                sc = judge(DOC, turns[-1], replies[-1])
+                judged.append({"case": name, "customer": turns[-1], "reply": replies[-1], "deterministic": bool(ok), "judge": sc})
         except Exception as e:
             ok, why = False, f"exception {e!r}"
         passes += bool(ok)
@@ -108,5 +114,21 @@ for name, turns, check in CASES:
 
 total, ok_runs = len(CASES) * REPEATS, sum(r["passes"] for r in results)
 print(f"\nSCORE: {ok_runs}/{total} runs passed ({100 * ok_runs / total:.0f}%), {sum(r['passes'] == r['runs'] for r in results)}/{len(CASES)} cases fully stable, {time.time() - t0:.0f}s")
+ok_scores = [j["judge"] for j in judged if "error" not in j["judge"]]
+if ok_scores:
+    avg = {k: sum(x[k] for x in ok_scores) / len(ok_scores) for k in ("grounded", "helpful", "tone", "concise")}
+    print("JUDGE (1-5, mean): " + ", ".join(f"{k} {v:.2f}" for k, v in avg.items()) + f"  over {len(ok_scores)} replies")
+
+# Level 3: a person signs off. Anything the judge scored low, or that disagrees with the string check, goes to a review sheet.
+queue = [j for j in judged if low(j["judge"]) or j["deterministic"] == low(j["judge"])]
+review = os.environ.get("EVAL_REVIEW")
+if review and judged:
+    with open(review, "w") as f:
+        f.write(f"# Human review queue ({len(queue)} of {len(judged)} replies)\n\nTick a box when you have read the reply and agree with the verdict; write what is wrong under it.\n\n")
+        for j in queue:
+            why = "judge scored low" if low(j["judge"]) else "string check failed but the judge liked it" if not j["deterministic"] else ""
+            f.write(f"- [ ] **{j['case']}** ({why})\n  - Customer: {j['customer']}\n  - Reply: {j['reply']}\n  - Judge: {json.dumps(j['judge'])}\n\n")
+    print(f"REVIEW QUEUE: {len(queue)} reply(ies) need a person -> {review}")
+
 out = os.environ.get("EVAL_REPORT")
-if out: json.dump({"repeats": REPEATS, "results": results, "score": ok_runs / total, "model": "apac.amazon.nova-lite-v1:0"}, open(out, "w"), indent=1)
+if out: json.dump({"repeats": REPEATS, "results": results, "judged": judged, "score": ok_runs / total, "model": os.environ.get("EVAL_MODEL", "apac.amazon.nova-pro-v1:0")}, open(out, "w"), indent=1)
