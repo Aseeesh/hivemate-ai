@@ -1,4 +1,4 @@
-"""One structured log line per model call, for monitoring (e.g. LLMScope). Metadata only: never message text.
+"""One structured log line per model call, for monitoring in CloudWatch Logs Insights. Metadata only: never message text.
 
 Fields follow the OpenTelemetry GenAI names where there is one. The tenant id is hashed so dashboards can group by business
 without exposing ids.

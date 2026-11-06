@@ -76,14 +76,11 @@ Context and memory, tools, security and evaluation around the model are mapped i
 `tests/eval/agent_eval.py` runs 22 behaviour cases (answers match the documents, no invented prices, details captured, handoff, injection, privacy,
 summary honesty) three times each against the deployed stack and reports pass rates. Results and model comparison: `docs/EVAL.md`.
 
-## Monitoring models with LLMScope
+## Monitoring models
 
-Every Bedrock call writes one metadata-only log line (`src/common/llmlog.py`: model, tokens, latency, stop reason, hashed tenant; **never message text**).
-`tools/llmscope_ship.py` pulls those lines from CloudWatch and sends them as OTLP spans and metrics to a local
-[LLMScope](https://github.com/Aseeesh/llmscope) stack (Grafana). It pulls from your laptop, so the Lambdas need no public endpoint or extra dependency.
-LLMScope's own SDK/proxy do not support Bedrock, which is why the OTLP path is used. Cost uses estimated Nova prices in the script; verify them.
-It also sends each call as an OTLP log record, so Hivemate shows up in LLMScope's **Log Search** (and its calls-per-minute chart); each log line shares its trace id with the span. `--logs-only` backfills history without double-counting metrics.
-Verified: token and cost counters in Prometheus, spans in Tempo, and log lines in Loki. Manual or `--watch`; not an always-on pipeline.
+Every model call writes one metadata-only JSON line (`services/src/common/llmlog.py`: model, tokens, latency, outcome, hashed tenant; never customer text).
+Query them in CloudWatch Logs Insights, and read Bedrock's own CloudWatch metrics (invocations, tokens, latency per model). Unsafe input and output is
+blocked by Bedrock Guardrails. Details and ready-made queries: [docs/OBSERVABILITY.md](docs/OBSERVABILITY.md), including why LLMScope was tried and removed.
 
 ## Email sending
 
