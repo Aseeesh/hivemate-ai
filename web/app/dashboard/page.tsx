@@ -8,14 +8,16 @@ import Documents from '@/components/Documents';
 import Inbox from '@/components/Inbox';
 import Agent from '@/components/Agent';
 import AuditLog from '@/components/AuditLog';
+import Home from '@/components/Home';
 
-const TABS = ['Inbox', 'Agent', 'Plugins', 'Documents', 'Audit'] as const;
+// Named for what the owner gets, not for how the system is built.
+const TABS = ['Home', 'Customers', 'Emails', 'Business info', 'Features', 'Activity'] as const;
 type Tab = (typeof TABS)[number];
 
 export default function Dashboard() {
   const router = useRouter();
   const [me, setMe] = useState<Me | null>(null);
-  const [tab, setTab] = useState<Tab>('Inbox');
+  const [tab, setTab] = useState<Tab>('Home');
   const [error, setError] = useState('');
 
   useEffect(() => {
@@ -40,15 +42,16 @@ export default function Dashboard() {
       </header>
       {error && <p className="err" role="alert">{error}. If you just signed up, sign out and sign in again.</p>}
       <nav className="tabs" role="tablist">
-        {TABS.filter((t) => t !== 'Audit' || isAdmin).map((t) => (
+        {TABS.filter((t) => t !== 'Activity' || isAdmin).map((t) => (
           <button key={t} role="tab" aria-selected={tab === t} onClick={() => setTab(t)}>{t}</button>
         ))}
       </nav>
-      {me && tab === 'Inbox' && <Inbox />}
-      {me && tab === 'Agent' && <Agent isAdmin={isAdmin} />}
-      {me && tab === 'Plugins' && <Plugins isAdmin={isAdmin} />}
-      {me && tab === 'Documents' && <Documents isAdmin={isAdmin} />}
-      {me && tab === 'Audit' && isAdmin && <AuditLog />}
+      {me && tab === 'Home' && <Home go={(t) => setTab(t)} />}
+      {me && tab === 'Customers' && <Agent isAdmin={isAdmin} />}
+      {me && tab === 'Emails' && <Inbox />}
+      {me && tab === 'Business info' && <Documents isAdmin={isAdmin} />}
+      {me && tab === 'Features' && <Plugins isAdmin={isAdmin} />}
+      {me && tab === 'Activity' && isAdmin && <AuditLog />}
     </main>
   );
 }
