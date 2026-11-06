@@ -5,9 +5,11 @@ Each event's `whatsAppWebhookEntry` is a JSON string in Meta's webhook format.
 Outbound: replies go back through socialmessaging:SendWhatsAppMessage.
 Status: parsing is unit-tested with fixtures; NOT yet run against a live WhatsApp number.
 """
+import datetime
 import json
 import os
 import time
+import zoneinfo
 
 import boto3
 from botocore.exceptions import ClientError
@@ -60,6 +62,16 @@ def send(origination_id: str, to: str, text: str) -> None:
     _social.send_whatsapp_message(originationPhoneNumberId=origination_id, metaApiVersion="v20.0", message=json.dumps(payload).encode())
 
 
+def within_hours(hours: dict, tz: str, now: datetime.datetime | None = None) -> bool:
+    """True when the business itself is open (its own timezone), so the assistant can stay out of the owner's way."""
+    now = now or datetime.datetime.now(datetime.timezone.utc)
+    try:
+        local = now.astimezone(zoneinfo.ZoneInfo(tz))
+    except Exception:  # noqa: BLE001  unknown timezone: treat as UTC rather than failing the customer
+        local = now
+    return local.isoweekday() in hours.get("days", []) and hours.get("start", "00:00") <= local.strftime("%H:%M") < hours.get("end", "00:00")
+
+
 def handler(event, _context):
     for record in event.get("Records", []):
         for msg in parse(json.loads(record["Sns"]["Message"])):
@@ -69,6 +81,9 @@ def handler(event, _context):
                 continue
             pk = link["PK"]
             if not first_delivery(pk, msg["id"]):
+                continue
+            # "After hours only": while the business is open the owner answers from their own WhatsApp; the assistant does not butt in.
+            if link.get("mode") == "after_hours" and within_hours(db.clean(link.get("hours", {})), link.get("tz", "Pacific/Auckland")):
                 continue
             try:
                 out = agent.handle_message(pk.split("#", 1)[1], msg["text"], "whatsapp", msg["from"], customer_name=msg["name"])

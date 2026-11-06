@@ -207,12 +207,13 @@ export class ApiStack extends cdk.Stack {
     aiPolicies.forEach((st) => publicChatFn.addToRolePolicy(st));
     const publicApi = new apigwv2.HttpApi(this, 'PublicApi', {
       apiName: 'hivemate-public-chat',
-      corsPreflight: { allowOrigins: ['*'], allowMethods: [apigwv2.CorsHttpMethod.GET, apigwv2.CorsHttpMethod.POST], allowHeaders: ['content-type'] },
+      corsPreflight: { allowOrigins: ['*'], allowMethods: [apigwv2.CorsHttpMethod.GET, apigwv2.CorsHttpMethod.POST], allowHeaders: ['content-type', 'authorization'] },
     });
     const publicInt = new HttpLambdaIntegration('PublicChatInt', publicChatFn);
     publicApi.addRoutes({ path: '/widget.js', methods: [apigwv2.HttpMethod.GET], integration: publicInt });
     publicApi.addRoutes({ path: '/info', methods: [apigwv2.HttpMethod.GET], integration: publicInt });
     publicApi.addRoutes({ path: '/chat', methods: [apigwv2.HttpMethod.POST], integration: publicInt });
+    publicApi.addRoutes({ path: '/integrations/email/suggest', methods: [apigwv2.HttpMethod.POST], integration: publicInt });
     // Burst/steady limits across the whole public API; the account-wide Lambda quota is small.
     (publicApi.defaultStage!.node.defaultChild as apigwv2.CfnStage).defaultRouteSettings = { throttlingBurstLimit: 10, throttlingRateLimit: 5 };
     new cdk.CfnOutput(this, 'PublicChatUrl', { value: publicApi.apiEndpoint });

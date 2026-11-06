@@ -2,7 +2,7 @@
 import re
 
 # Delimiters our prompt uses. Content that contains them could close a block early and smuggle in instructions.
-_DELIMITERS = re.compile(r"</?\s*(knowledge|memory|transcript|system|instructions?)\s*>", re.I)
+_DELIMITERS = re.compile(r"</?\s*(knowledge|memory|transcript|system|instructions?|email)\s*>", re.I)
 
 
 def untrusted(text: str, limit: int = 6000) -> str:

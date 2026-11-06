@@ -68,10 +68,10 @@ function Transcript({ id, isAdmin, onChange }: { id: string; isAdmin: boolean; o
 }
 
 function WhatsAppLink() {
-  const [meta, setMeta] = useState(''); const [orig, setOrig] = useState(''); const [msg, setMsg] = useState('');
+  const [meta, setMeta] = useState(''); const [orig, setOrig] = useState(''); const [msg, setMsg] = useState(''); const [mode, setMode] = useState<'always' | 'after_hours'>('after_hours'); const [start, setStart] = useState('08:00'); const [end, setEnd] = useState('17:00');
   async function link(e: FormEvent) {
     e.preventDefault(); setMsg('');
-    try { await api('PUT', '/channels/whatsapp', { metaPhoneNumberId: meta, originationPhoneNumberId: orig }); setMsg('Linked.'); } catch (err) { setMsg((err as Error).message); }
+    try { await api('PUT', '/channels/whatsapp', { metaPhoneNumberId: meta, originationPhoneNumberId: orig, mode, hours: { days: [1, 2, 3, 4, 5], start, end } }); setMsg('Linked.'); } catch (err) { setMsg((err as Error).message); }
   }
   return (
     <details className="card"><summary>Connect a WhatsApp number</summary>
@@ -79,6 +79,12 @@ function WhatsAppLink() {
         <p className="muted">After registering your number in AWS End User Messaging Social, enter its two IDs. Customer messages to that number will be answered by this agent.</p>
         <label>Meta phone number ID (digits)<input required pattern="\d{5,30}" value={meta} onChange={(e) => setMeta(e.target.value)} /></label>
         <label>AWS phone number ID (phone-number-id-…)<input required value={orig} onChange={(e) => setOrig(e.target.value)} /></label>
+        <label>When should the assistant reply?
+          <select value={mode} onChange={(e) => setMode(e.target.value as 'always' | 'after_hours')}>
+            <option value="after_hours">Only outside my opening hours (I answer myself during the day)</option>
+            <option value="always">Always</option>
+          </select></label>
+        {mode === 'after_hours' && <div className="row"><label>Open from<input type="time" value={start} onChange={(e) => setStart(e.target.value)} /></label><label>until<input type="time" value={end} onChange={(e) => setEnd(e.target.value)} /></label><span className="muted">Monday to Friday, in your business timezone.</span></div>}
         <div className="row"><button className="btn primary">Link number</button><span role="status" className="muted">{msg}</span></div>
       </form>
     </details>
@@ -86,7 +92,7 @@ function WhatsAppLink() {
 }
 
 function WebChannel() {
-  const [key, setKey] = useState<string | null>(); const [origins, setOrigins] = useState(''); const [msg, setMsg] = useState('');
+  const [key, setKey] = useState<string | null>(); const [origins, setOrigins] = useState(''); const [msg, setMsg] = useState(''); const [waNum, setWaNum] = useState('');
   const publicUrl = process.env.NEXT_PUBLIC_PUBLIC_CHAT_URL ?? '';
   useEffect(() => {
     api<{ key: string | null; allowedOrigins: string[] }>('GET', '/channels/web').then((c) => { setKey(c.key); setOrigins(c.allowedOrigins.join('\n')); }).catch(() => undefined);
@@ -99,7 +105,8 @@ function WebChannel() {
       setKey(c.key); setMsg(rotate ? 'New key created. The old one stopped working.' : 'Saved.');
     } catch (err) { setMsg((err as Error).message); }
   }
-  const snippet = key ? `<script src="${publicUrl}/widget.js" data-key="${key}" async></script>` : '';
+  const wa = waNum.replace(/\D/g, '');
+  const snippet = key ? `<script src="${publicUrl}/widget.js" data-key="${key}"${/^\d{8,15}$/.test(wa) ? ` data-whatsapp="${wa}"` : ''} async></script>` : '';
   return (
     <details className="card"><summary>Add the chat to your website</summary>
       <div className="stack" style={{ marginTop: 12 }}>
@@ -113,6 +120,7 @@ function WebChannel() {
           <span role="status" className="muted">{msg}</span>
         </div>
         {key && <><label>Shareable chat link (social profiles, emails, invoices, QR codes)<input readOnly value={`${typeof window !== 'undefined' ? window.location.origin : ''}/chat/?key=${key}`} onFocus={(e) => e.currentTarget.select()} /></label>
+          <label>Your WhatsApp number, with country code (optional: adds a &quot;Continue on WhatsApp&quot; link)<input value={waNum} onChange={(e) => setWaNum(e.target.value)} placeholder="6421234567" inputMode="numeric" /></label>
           <label>Embed code for your website<input readOnly value={snippet} onFocus={(e) => e.currentTarget.select()} /></label>
           {!publicUrl && <p className="muted">Set NEXT_PUBLIC_PUBLIC_CHAT_URL in web/.env.local to the PublicChatUrl stack output.</p>}</>}
       </div>

@@ -8,7 +8,7 @@ import uuid
 import boto3
 from botocore.exceptions import ClientError
 
-from src.api import documents
+from src.api import documents, integrations
 from src.common import db, mailer, plugins
 from src.common.context import Forbidden, from_event
 
@@ -117,6 +117,19 @@ def handler(event, _context):
             out = documents.create_upload(ctx, body["filename"], str(body.get("audience", "public")))
             db.audit(ctx.pk, ctx.user_id, "document.upload_requested", {"key": out["key"], "audience": str(body.get("audience", "public"))})
             return _resp(200, out)
+
+        if path == "/integrations/email":
+            ctx.require_admin()
+            if method == "GET":
+                return _resp(200, integrations.email_status(ctx))
+            if method == "PUT":  # create or rotate; the token is returned once and never again
+                token = integrations.create_email_token(ctx)
+                db.audit(ctx.pk, ctx.user_id, "integration.email_token_created", {})
+                return _resp(200, {"token": token})
+            if method == "DELETE":
+                integrations.revoke_email(ctx)
+                db.audit(ctx.pk, ctx.user_id, "integration.email_token_revoked", {})
+                return _resp(200, {"connected": False})
 
         if (method, path) == ("GET", "/knowledge/gaps"):
             ctx.require_admin()

@@ -85,10 +85,19 @@ def handler(event, _context):
             claimed = db.table().query(IndexName="ChannelIndex", KeyConditionExpression="GSI1PK = :p", ExpressionAttributeValues={":p": f"WA#{meta_id}"})["Items"]
             if any(i["PK"] != ctx.pk for i in claimed):
                 return _resp(409, {"error": "this WhatsApp number is already linked to another business"})
+            mode = str(body.get("mode", "always"))
+            if mode not in ("always", "after_hours"):
+                return _resp(400, {"error": "mode must be always or after_hours"})
+            hours = body.get("hours") or {"days": [1, 2, 3, 4, 5], "start": "08:00", "end": "17:00"}
+            if (not isinstance(hours.get("days"), list) or not all(isinstance(d, int) and 1 <= d <= 7 for d in hours["days"])
+                    or not all(re.fullmatch(r"([01]\d|2[0-3]):[0-5]\d", str(hours.get(k, ""))) for k in ("start", "end")) or hours["start"] >= hours["end"]):
+                return _resp(400, {"error": "hours must look like {days:[1..7], start:'08:00', end:'17:00'}"})
+            tz = (db.table().get_item(Key={"PK": ctx.pk, "SK": "META"}).get("Item") or {}).get("timezone", "Pacific/Auckland")
             db.table().put_item(Item={"PK": ctx.pk, "SK": "CHANNEL#whatsapp", "GSI1PK": f"WA#{meta_id}", "GSI1SK": ctx.pk,
-                                      "metaPhoneNumberId": meta_id, "originationPhoneNumberId": origination})
-            db.audit(ctx.pk, ctx.user_id, "channel.whatsapp_linked", {"metaPhoneNumberId": meta_id})
-            return _resp(200, {"linked": meta_id})
+                                      "metaPhoneNumberId": meta_id, "originationPhoneNumberId": origination,
+                                      "mode": mode, "hours": {"days": hours["days"], "start": hours["start"], "end": hours["end"]}, "tz": tz})
+            db.audit(ctx.pk, ctx.user_id, "channel.whatsapp_linked", {"metaPhoneNumberId": meta_id, "mode": mode})
+            return _resp(200, {"linked": meta_id, "mode": mode})
 
         if (method, path) == ("GET", "/channels/web"):
             ctx.require_admin()

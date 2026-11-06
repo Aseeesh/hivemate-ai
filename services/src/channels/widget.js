@@ -4,6 +4,7 @@
   var s = document.currentScript || document.querySelector('script[data-key][src*="widget.js"]');
   if (!s || !s.dataset.key) return;
   var base = new URL(s.src).origin, key = s.dataset.key, accent = s.dataset.color || '#2f6f5e';
+  var wa = /^\d{8,15}$/.test(s.dataset.whatsapp || '') ? s.dataset.whatsapp : ''; // optional: lets the visitor carry on in the business's own WhatsApp
   var store = {
     get: function (k) { try { return sessionStorage.getItem(k); } catch (e) { return null; } },
     set: function (k, v) { try { sessionStorage.setItem(k, v); } catch (e) {} }
@@ -35,7 +36,13 @@
   var note = el('div', 'padding:0 12px 8px;font-size:11px;color:#6b7370;background:#fff', 'AI assistant. It can make mistakes; the team may follow up.');
   var launcher = el('button', 'width:56px;height:56px;border-radius:50%;border:0;color:#fff;font-size:24px;cursor:pointer;box-shadow:0 6px 20px rgba(0,0,0,.25);background:' + accent, '\u{1F4AC}');
   launcher.setAttribute('aria-label', 'Open chat');
-  form.append(input, send); panel.append(head, log, form, note); host.append(panel, launcher); document.body.appendChild(host);
+  form.append(input, send); panel.append(head, log, form, note);
+  if (wa) {
+    var link = el('a', 'display:block;padding:0 12px 8px;font-size:12px;color:' + accent + ';background:#fff;text-decoration:underline', 'Prefer WhatsApp? Continue there');
+    link.href = 'https://wa.me/' + wa + '?text=' + encodeURIComponent('Hi, I was chatting on your website.'); link.target = '_blank'; link.rel = 'noopener noreferrer';
+    panel.append(link);
+  }
+  host.append(panel, launcher); document.body.appendChild(host);
 
   function bubble(text, mine) {
     var b = el('div', 'max-width:85%;padding:8px 11px;border-radius:12px;white-space:pre-wrap;word-wrap:break-word;' +

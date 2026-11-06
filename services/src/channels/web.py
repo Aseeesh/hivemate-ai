@@ -13,8 +13,12 @@ import uuid
 
 from botocore.exceptions import ClientError
 
-from src.common import db
+from src.api import integrations
+from src.common import db, llmlog
+from src.common.harness import untrusted
+from src.common.knowledge import retrieve
 from src.plugins.conversation import agent
+from src.plugins.email import processor
 
 KEY_RE = re.compile(r"^pk_[A-Za-z0-9_-]{16,64}$")
 CONV_RE = re.compile(r"^[a-f0-9]{32}$")
@@ -67,12 +71,52 @@ def over_limit(pk: str, key: str, ip: str, now: float | None = None) -> str:
     return ""
 
 
+SUGGEST_PER_DAY = int(os.environ.get("EMAIL_SUGGEST_DAILY_CAP", "200"))
+DEFAULT_EMAIL_CONFIG = {"businessTone": "friendly, concise, New Zealand English", "autoReplyCategories": ["faq"], "confidenceThreshold": 0.8, "knowledgeBaseId": ""}
+
+
+def tenant_for_token(token: str) -> dict | None:
+    if not token.startswith(integrations.PREFIX) or len(token) > 80:
+        return None
+    res = db.table().query(IndexName="ChannelIndex", KeyConditionExpression="GSI1PK = :p", ExpressionAttributeValues={":p": f"TOK#{integrations.hash_token(token)}"})
+    return res["Items"][0] if res["Items"] else None
+
+
+def suggest_email(event, body: dict, headers: dict) -> dict:
+    """Server-to-server: a business's own Gmail script asks for a suggested reply. Nothing is sent and nothing is stored."""
+    auth = headers.get("authorization", "")
+    item = tenant_for_token(auth[7:].strip()) if auth.lower().startswith("bearer ") else None
+    if not item:
+        return _resp(401, {"error": "invalid token"})
+    pk = item["PK"]
+    tenant_id = pk.split("#", 1)[1]
+    sender, subject, text = str(body.get("from", ""))[:200], str(body.get("subject", ""))[:300], str(body.get("body", ""))[:6000]
+    if not text.strip():
+        return _resp(400, {"error": "body is required"})
+    if bump(pk, f"RATE#sugg#{time.strftime('%Y-%m-%d', time.gmtime())}", 172800) > SUGGEST_PER_DAY:
+        return _resp(429, {"error": "daily suggestion limit reached"})
+    plugin = db.table().get_item(Key={"PK": pk, "SK": "PLUGIN#email-automation"}).get("Item")
+    business = db.table().get_item(Key={"PK": pk, "SK": "META"}).get("Item", {}).get("name", "")
+    cfg = {**DEFAULT_EMAIL_CONFIG, **(db.clean(plugin["config"]) if plugin else {}), "businessName": business}
+    llmlog.set_tenant(tenant_id)
+    msg = {"from": untrusted(sender, 200), "subject": untrusted(subject, 300), "body": untrusted(text)}
+    knowledge = untrusted(retrieve(cfg.get("knowledgeBaseId") or os.environ.get("KNOWLEDGE_BASE_ID", ""), f"{subject}\n{text}"[:1000], tenant_id))  # customer audience: public documents only
+    result = processor.draft(msg, cfg, knowledge)
+    human = processor.needs_human(result, cfg, knowledge, approval_required=False)
+    db.audit(pk, "integration:email", "integration.email_suggested", {"category": result["category"], "needsHuman": human})
+    return _resp(200, {"category": result["category"], "confidence": result["confidence"], "reply": result["reply"], "needsHuman": human, "business": business})
+
+
 def handler(event, _context):
     method = event["requestContext"]["http"]["method"]
     path = event["rawPath"]
     if method == "OPTIONS":
         return {"statusCode": 204}
     try:
+        if (method, path) == ("POST", "/integrations/email/suggest"):
+            hdrs = {k.lower(): v for k, v in (event.get("headers") or {}).items()}
+            return suggest_email(event, json.loads(event["body"]) if event.get("body") else {}, hdrs)
+
         if (method, path) == ("GET", "/widget.js"):
             with open(WIDGET, encoding="utf-8") as f:
                 return _resp(200, f.read(), "text/javascript; charset=utf-8", {"cache-control": "public, max-age=300"})

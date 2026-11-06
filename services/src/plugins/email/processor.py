@@ -22,6 +22,7 @@ Rules:
 - Do NOT say the business does or does not offer something unless <knowledge> says so. Never mention deals, policies or services that are not in <knowledge>.
 - If you could not fully answer from <knowledge>, set category to "other" and confidence below 0.5.
 - Never state prices, availability or commitments that are not in <knowledge>.
+- Sign off as "the team at {business}". Never write a placeholder such as [Your Name] or a made-up person's name.
 Respond with ONLY a JSON object:
 {{"category": "faq|booking|pricing|complaint|refund|legal|other", "confidence": 0..1, "reply": "..."}}"""
 
@@ -29,7 +30,7 @@ Respond with ONLY a JSON object:
 def draft(msg: dict, config: dict, knowledge: str) -> dict:
     res = llmlog.converse(
         bedrock, "email", modelId=os.environ["BEDROCK_MODEL_ID"],
-        system=[{"text": SYSTEM.format(tone=config["businessTone"])}],
+        system=[{"text": SYSTEM.format(tone=config["businessTone"], business=config.get("businessName") or "the business")}],
         messages=[{"role": "user", "content": [{"text": (
             f"<knowledge>\n{knowledge}\n</knowledge>\n"
             f"<email>\nFrom: {msg['from']}\nSubject: {msg['subject']}\n\n{msg['body']}\n</email>"
@@ -55,6 +56,20 @@ def draft(msg: dict, config: dict, knowledge: str) -> dict:
         return {"category": "other", "confidence": 0.0, "reply": ""}
 
 
+def needs_human(result: dict, config: dict, knowledge: str, approval_required: bool) -> bool:
+    """One rule for 'a person must look at this reply', shared by the email worker and the Gmail suggestion endpoint."""
+    return bool(
+        approval_required
+        or result.get("blocked", False)
+        or not result["reply"]
+        or result["category"] in SENSITIVE
+        or result["category"] not in config["autoReplyCategories"]
+        or result["confidence"] < config["confidenceThreshold"]
+        # The model can invent facts when it has nothing to ground on; a human must check those.
+        or knowledge in NO_KNOWLEDGE
+    )
+
+
 def process(detail: dict) -> None:
     tenant_id, message_id = detail["tenantId"], detail["messageId"]
     llmlog.set_tenant(tenant_id)
@@ -64,20 +79,12 @@ def process(detail: dict) -> None:
         db.audit(pk, "plugin:email-automation", "email.skipped", {"reason": "plugin not installed"})
         return
     config = db.clean(plugin["config"])
+    config["businessName"] = db.table().get_item(Key={"PK": pk, "SK": "META"}).get("Item", {}).get("name", "")
 
     knowledge = retrieve(config["knowledgeBaseId"] or os.environ.get("KNOWLEDGE_BASE_ID", ""), f"{detail['subject']}\n{detail['body']}", tenant_id)
     result = draft(detail, config, knowledge)
 
-    needs_approval = (
-        config["approvalRequired"]
-        or result.get("blocked", False)
-        or not result["reply"]
-        or result["category"] in SENSITIVE
-        or result["category"] not in config["autoReplyCategories"]
-        or result["confidence"] < config["confidenceThreshold"]
-        # The model can invent facts when it has nothing to ground on; a human must check those.
-        or knowledge in NO_KNOWLEDGE
-    )
+    needs_approval = needs_human(result, config, knowledge, config["approvalRequired"])
     status, send_error, ses_id = "PENDING_APPROVAL", "", ""
     if not needs_approval:
         if mailer.enabled():

@@ -9,6 +9,7 @@ import Inbox from '@/components/Inbox';
 import Agent from '@/components/Agent';
 import AuditLog from '@/components/AuditLog';
 import Home from '@/components/Home';
+import GmailConnect from '@/components/GmailConnect';
 
 // Named for what the owner gets, not for how the system is built.
 const TABS = ['Home', 'Customers', 'Emails', 'Business info', 'Features', 'Activity'] as const;
@@ -48,7 +49,7 @@ export default function Dashboard() {
       </nav>
       {me && tab === 'Home' && <Home go={(t) => setTab(t)} />}
       {me && tab === 'Customers' && <Agent isAdmin={isAdmin} />}
-      {me && tab === 'Emails' && <Inbox />}
+      {me && tab === 'Emails' && <div className="stack"><GmailConnect isAdmin={isAdmin} /><Inbox /></div>}
       {me && tab === 'Business info' && <Documents isAdmin={isAdmin} />}
       {me && tab === 'Features' && <Plugins isAdmin={isAdmin} />}
       {me && tab === 'Activity' && isAdmin && <AuditLog />}
