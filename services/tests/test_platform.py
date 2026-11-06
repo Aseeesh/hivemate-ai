@@ -83,3 +83,19 @@ def test_tenant_id_in_path_is_validated(monkeypatch):
     assert ev("/platform/tenants/ab") == 400        # route matches, id too short
     assert ev("/platform/tenants/AB!x") == 404      # not a valid id shape: no route
     assert ev("/platform/tenants/abc123def") == 404  # valid shape, unknown tenant
+
+
+def test_daily_series_has_no_gaps_and_scopes_to_a_tenant():
+    now = 1_800_000_000
+    day = 86400
+    items = [
+        {"PK": "TENANT#aaaaaa", "SK": "CONV#1", "createdAt": now},
+        {"PK": "TENANT#aaaaaa", "SK": "CONV#2", "createdAt": now - day},
+        {"PK": "TENANT#aaaaaa", "SK": "LEAD#1", "createdAt": now},
+        {"PK": "TENANT#bbbbbb", "SK": "CONV#3", "createdAt": now},
+        {"PK": "TENANT#aaaaaa", "SK": "CONV#old", "createdAt": now - 30 * day},
+    ]
+    all_ = platform.daily(items, days=3, now=now)
+    assert len(all_) == 3 and [d["conversations"] for d in all_] == [0, 1, 2]
+    mine = platform.daily(items, "aaaaaa", days=3, now=now)
+    assert [d["conversations"] for d in mine] == [0, 1, 1] and mine[-1]["leads"] == 1

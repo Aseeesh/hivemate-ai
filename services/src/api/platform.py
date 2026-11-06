@@ -1,7 +1,7 @@
 """Platform console API (super admin). READ-ONLY, metadata only.
 
 Who: members of the Cognito group `platform-admins` (assigned by an operator with the AWS CLI; a browser cannot grant it).
-What: tenant list, usage counts, plugin/user/channel status, recent audit actions.
+What: tenant list, usage counts, plugin/user/channel status, website origins, document names, daily activity, recent audit actions.
 Never: customer messages, conversation text, lead details, email bodies, plugin config values, site keys or API tokens.
 Every look at one business is written to THAT business's audit trail (`platform.viewed_tenant`) so operator access is visible to it.
 Scale note: counts come from one table scan, fine for a dev/early stage; replace with maintained counters before hundreds of tenants.
@@ -29,7 +29,7 @@ def _resp(status: int, body) -> dict:
 def scan_all() -> tuple[list[dict], bool]:
     """Keys and small attributes only: text fields (messages, turns, summaries) are never requested."""
     items, kw, truncated = [], {
-        "ProjectionExpression": "PK, SK, #n, createdAt, #r, email, lastAt, updatedAt, #s, channel, #at, #ac, version",
+        "ProjectionExpression": "PK, SK, #n, createdAt, #r, email, lastAt, updatedAt, #s, channel, #at, #ac, version, allowedOrigins",
         "ExpressionAttributeNames": {"#n": "name", "#r": "role", "#s": "status", "#at": "at", "#ac": "action"},
     }, False
     while True:
@@ -52,7 +52,7 @@ def summarise(items: list[dict]) -> dict[str, dict]:
         if not pk.startswith("TENANT#"):
             continue
         t = out.setdefault(pk[7:], {"tenantId": pk[7:], "name": "", "createdAt": None, "users": 0, "plugins": [], "conversations": 0,
-                                    "leads": 0, "leadsComplete": 0, "handoffs": 0, "messages": 0, "messagesHeld": 0, "lastActivity": 0, "channels": []})
+                                    "leads": 0, "leadsComplete": 0, "handoffs": 0, "messages": 0, "messagesHeld": 0, "lastActivity": 0, "channels": [], "origins": []})
         kind = sk.split("#", 1)[0]
         if sk == "META":
             t["name"], t["createdAt"] = it.get("name", ""), it.get("createdAt")
@@ -74,7 +74,24 @@ def summarise(items: list[dict]) -> dict[str, dict]:
             t["lastActivity"] = max(t["lastActivity"], int(it.get("at", 0)) // 1000)
         elif kind == "CHANNEL":
             t["channels"].append(sk[8:])
+            t["origins"] = [str(o)[:200] for o in (it.get("allowedOrigins") or [])][:20]
     return out
+
+
+def daily(items: list[dict], tenant_id: str | None = None, days: int = 14, now: float | None = None) -> list[dict]:
+    """Conversations and leads started per UTC day for the last `days` days, oldest first (zeros included so charts have no gaps)."""
+    now = now or time.time()
+    keys = [time.strftime("%Y-%m-%d", time.gmtime(now - i * 86400)) for i in range(days - 1, -1, -1)]
+    out = {k: {"day": k, "conversations": 0, "leads": 0} for k in keys}
+    for it in items:
+        if tenant_id and it["PK"] != f"TENANT#{tenant_id}":
+            continue
+        kind = it["SK"].split("#", 1)[0]
+        if kind in ("CONV", "LEAD") and it.get("createdAt"):
+            day = time.strftime("%Y-%m-%d", time.gmtime(int(it["createdAt"])))
+            if day in out:
+                out[day]["conversations" if kind == "CONV" else "leads"] += 1
+    return list(out.values())
 
 
 def overview(rollup: dict[str, dict]) -> dict:
@@ -101,6 +118,8 @@ def detail(tenant_id: str, items: list[dict], rollup: dict) -> dict | None:
     docs = s3.list_objects_v2(Bucket=os.environ["DOCS_BUCKET"], Prefix=f"tenants/{tenant_id}/docs/", MaxKeys=1000).get("Contents", [])
     docs = [o for o in docs if not o["Key"].endswith(".metadata.json")]
     return {**t, "userList": users, "pluginList": plugins, "documents": {"count": len(docs), "bytes": sum(o["Size"] for o in docs)},
+            "documentList": [{"name": o["Key"].rsplit("/", 1)[-1], "size": o["Size"], "modified": o["LastModified"].isoformat() if o.get("LastModified") else ""} for o in docs][:100],
+            "daily": daily(items, tenant_id),
             "recentAudit": [{"at": a.get("at"), "action": a.get("action", "")} for a in audit]}  # action names only, no detail payloads
 
 
@@ -114,7 +133,7 @@ def handler(event, _context):
         items, truncated = scan_all()
         rollup = summarise(items)
         if (method, path) == ("GET", "/platform/overview"):
-            return _resp(200, {**overview(rollup), "truncated": truncated})
+            return _resp(200, {**overview(rollup), "daily": daily(items), "truncated": truncated})
         if (method, path) == ("GET", "/platform/tenants"):
             rows = sorted(rollup.values(), key=lambda t: t["lastActivity"], reverse=True)
             return _resp(200, {"tenants": rows, "truncated": truncated})

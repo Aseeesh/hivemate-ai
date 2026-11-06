@@ -26,9 +26,10 @@ export type Audit = { SK: string; actor: string; action: string; at: number; det
 
 export type ChatReply = { conversationId: string; reply: string; status: string; collected: Record<string, string>; complete: boolean };
 export type Lead = { SK: string; convId: string; channel: string; customer: string; collected: Record<string, string>; status: string; handoffReason?: string; notes?: string; summary?: string; updatedAt: number };
-export type Conv = { convId: string; channel: string; customer: string; status: string; collected: Record<string, string>; turns: number; lastAt: number };
+export type Conv = { convId: string; channel: string; customer: string; status: string; collected: Record<string, string>; turns: number; lastAt: number; createdAt?: number };
 export type ConvDetail = { conversation: Conv; turns: { role: string; text: string; at: number }[] };
 
-export type PlatformTenant = { tenantId: string; name: string; createdAt: number | null; users: number; plugins: string[]; conversations: number; leads: number; leadsComplete: number; handoffs: number; messages: number; messagesHeld: number; lastActivity: number; channels: string[] };
-export type PlatformOverview = { tenants: number; users: number; conversations: number; leads: number; leadsComplete: number; handoffs: number; messages: number; messagesHeld: number; activeLast24h: number; pluginInstalls: Record<string, number>; truncated: boolean };
-export type PlatformDetail = PlatformTenant & { userList: { email: string; role: string }[]; pluginList: { pluginId: string; version: string }[]; documents: { count: number; bytes: number }; recentAudit: { at: number; action: string }[] };
+export type PlatformTenant = { tenantId: string; name: string; createdAt: number | null; users: number; plugins: string[]; conversations: number; leads: number; leadsComplete: number; handoffs: number; messages: number; messagesHeld: number; lastActivity: number; channels: string[]; origins: string[] };
+export type DayPoint = { day: string; conversations: number; leads: number };
+export type PlatformOverview = { daily: DayPoint[]; tenants: number; users: number; conversations: number; leads: number; leadsComplete: number; handoffs: number; messages: number; messagesHeld: number; activeLast24h: number; pluginInstalls: Record<string, number>; truncated: boolean };
+export type PlatformDetail = PlatformTenant & { daily: DayPoint[]; documentList: { name: string; size: number; modified: string }[]; userList: { email: string; role: string }[]; pluginList: { pluginId: string; version: string }[]; documents: { count: number; bytes: number }; recentAudit: { at: number; action: string }[] };

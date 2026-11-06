@@ -38,7 +38,7 @@ def handler(event, _context):
         if (method, path) == ("GET", "/conversations"):
             items = db.query_prefix(ctx.pk, "CONV#", limit=100)
             items.sort(key=lambda c: c.get("lastAt", 0), reverse=True)
-            return _resp(200, [{k: c.get(k) for k in ("convId", "channel", "customer", "status", "collected", "turns", "lastAt")} for c in items])
+            return _resp(200, [{k: c.get(k) for k in ("convId", "channel", "customer", "status", "collected", "turns", "lastAt", "createdAt")} for c in items])
 
         m = re.fullmatch(r"/conversations/([a-f0-9]{8,40})", path)
         if m and method == "GET":

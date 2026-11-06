@@ -251,3 +251,11 @@ def test_tool_loop_is_bounded_when_the_model_never_stops_calling_tools(monkeypat
     monkeypatch.setattr(agent, "call_model", always_tool)
     assert agent.converse_loop("s", [], "hi", agent.tool_config(["name"]), {"collected": {}}, ["name"]) == ""
     assert len(calls) == agent.MAX_TOOL_LOOPS + 2
+
+
+def test_deflection_detector_flags_only_replies_that_just_ask_for_details():
+    from src.common.harness import deflects
+    assert deflects("What do you charge for a one bedroom flat?", "Thanks. What's your name and phone number?")
+    assert not deflects("What do you charge for a one bedroom flat?", "A one-bedroom flat is $140. Could I take your name?")
+    assert not deflects("How much is an end of lease clean?", "The team quotes those individually. Could I take your name?")
+    assert not deflects("Hi, I'm Jo, 021 123", "Thanks Jo. What's your phone number?")  # a statement, not a question

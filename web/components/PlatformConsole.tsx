@@ -1,5 +1,6 @@
 'use client';
 import { useCallback, useEffect, useState } from 'react';
+import { CountUp, DayBars, RankBars, Segments } from '@/components/charts';
 import { api, type PlatformDetail, type PlatformOverview, type PlatformTenant } from '@/lib/api';
 
 const ago = (s: number) => {
@@ -21,9 +22,15 @@ function Detail({ id, onClose }: { id: string; onClose: () => void }) {
       {d && <>
         <p className="muted">Viewing this business is recorded in its audit log. Customer messages, lead details and settings values are never shown here.</p>
         <div className="grid">
+          <DayBars title="Chats per day" unit="chats" data={d.daily.map((x) => ({ day: x.day, v: x.conversations }))} />
+          <DayBars title="Leads per day" unit="leads" color="var(--s3)" data={d.daily.map((x) => ({ day: x.day, v: x.leads }))} />
+        </div>
+        <Segments title="Enquiry outcomes" empty="No enquiries yet." parts={[{ label: 'Lead captured', value: d.leadsComplete, color: 'var(--s3)' }, { label: 'In progress', value: Math.max(0, d.leads - d.leadsComplete - d.handoffs), color: 'var(--s1)' }, { label: 'Handed to a person', value: d.handoffs, color: 'var(--s2)' }]} />
+        <div className="grid">
           <div><h3>Users</h3>{d.userList.map((u) => <div key={u.email}>{u.email} <span className="tag">{u.role}</span></div>)}</div>
           <div><h3>Plugins</h3>{d.pluginList.length ? d.pluginList.map((p) => <div key={p.pluginId}><span className="mono">{p.pluginId}</span> <span className="muted">v{p.version}</span></div>) : <span className="muted">none installed</span>}</div>
-          <div><h3>Knowledge &amp; channels</h3><div>{d.documents.count} documents ({kb(d.documents.bytes)})</div><div>Channels: {d.channels.length ? d.channels.join(', ') : 'none'}</div></div>
+          <div><h3>Website</h3>{d.origins.length ? d.origins.map((o) => <div key={o} className="mono">{o}</div>) : <span className="muted">{d.channels.includes('web') ? 'chat live, any website allowed' : 'no website chat'}</span>}<div className="muted" style={{ marginTop: 6 }}>Channels: {d.channels.length ? d.channels.join(', ') : 'none'}</div></div>
+          <div><h3>Knowledge ({d.documents.count} files, {kb(d.documents.bytes)})</h3>{d.documentList.length ? d.documentList.slice(0, 8).map((f) => <div key={f.name} className="mono">{f.name}</div>) : <span className="muted">no documents</span>}</div>
           <div><h3>Activity</h3><div>{d.conversations} conversations · {d.handoffs} handed off</div><div>{d.leadsComplete}/{d.leads} leads complete</div><div>{d.messages} emails · {d.messagesHeld} awaiting approval</div></div>
         </div>
         <h3>Recent actions</h3>
@@ -54,8 +61,15 @@ export default function PlatformConsole() {
       {error && <p className="err" role="alert">{error}</p>}
       <p className="muted">Read-only view across all businesses. Counts and status only: no customer content.</p>
       <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fill,minmax(150px,1fr))' }}>
-        {tiles.map(([k, v]) => <div key={k} className="card"><div className="muted" style={{ fontSize: 12 }}>{k}</div><div style={{ fontSize: 26, fontWeight: 600 }}>{v}</div></div>)}
+        {tiles.map(([k, v]) => <div key={k} className="card"><div className="muted" style={{ fontSize: 12 }}>{k}</div><div className="hero-num" style={{ fontSize: 26 }}>{typeof v === 'number' ? <CountUp value={v} /> : v}</div></div>)}
       </div>
+      {ov && <>
+        <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fit,minmax(340px,1fr))' }}>
+          <DayBars title="Chats per day, all businesses" unit="chats" data={ov.daily.map((x) => ({ day: x.day, v: x.conversations }))} />
+          <RankBars title="Most active businesses (chats)" unit="chats" rows={[...rows].sort((a, b) => b.conversations - a.conversations).slice(0, 8).map((t) => ({ id: t.tenantId, label: t.name || t.tenantId, value: t.conversations }))} onPick={setOpen} />
+        </div>
+        <Segments title="All enquiries across the platform" empty="No enquiries yet." parts={[{ label: 'Lead captured', value: ov.leadsComplete, color: 'var(--s3)' }, { label: 'In progress', value: Math.max(0, ov.leads - ov.leadsComplete - ov.handoffs), color: 'var(--s1)' }, { label: 'Handed to a person', value: ov.handoffs, color: 'var(--s2)' }]} />
+      </>}
       {ov && <p className="muted">Plugin installs: {Object.entries(ov.pluginInstalls).map(([k, v]) => `${k} ×${v}`).join(' · ') || 'none'}{ov.truncated ? ' · (partial: table too large for a full scan)' : ''}</p>}
       {open && <Detail id={open} onClose={() => setOpen(undefined)} />}
       <section className="card stack">

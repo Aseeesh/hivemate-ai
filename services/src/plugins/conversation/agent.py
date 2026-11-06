@@ -13,7 +13,7 @@ import boto3
 from botocore.exceptions import ClientError
 
 from src.common import db, llmlog, mailer
-from src.common.harness import untrusted
+from src.common.harness import deflects, untrusted
 from src.common.knowledge import NO_KNOWLEDGE, retrieve
 from src.plugins.conversation import memory
 
@@ -296,6 +296,15 @@ def handle_message(tenant_id: str, text: str, channel: str, customer: str, conv_
             print(json.dumps({"level": "ERROR", "event": "model_failed", "error": repr(exc)[:300]}))
             reply = ""
             state["handoff"] = state["handoff"] or "assistant error, please reply personally"
+        if deflects(text, reply):  # harness check: a question must be answered before details are requested; retry once with feedback
+            try:
+                retry = converse_loop(system_prompt(business, cfg, fields, required, state["collected"], knowledge, untrusted(memory.as_prompt(profile), 600)),
+                                      hist, text + "\n\n[Reminder from the system: answer the customer's question first, using only <knowledge>, or say the team will confirm. Then you may ask for details.]",
+                                      tool_config(fields), state, fields)
+                if retry and not deflects(text, retry):
+                    reply = retry
+            except ClientError:
+                pass
         reply = reply or "Thanks for your message. I've passed it to the team and they'll follow up with you."
         out_blocked, safe = guard(reply, "OUTPUT")
         if out_blocked:
