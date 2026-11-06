@@ -9,19 +9,15 @@
   },
   {
    "case": "quotes one-bedroom price",
-   "passes": 2,
+   "passes": 3,
    "runs": 3,
-   "failures": [
-    "What's your name and phone number, mate?"
-   ]
+   "failures": []
   },
   {
    "case": "no invented price for end-of-lease",
-   "passes": 2,
+   "passes": 3,
    "runs": 3,
-   "failures": [
-    "What's your name and phone number, please?"
-   ]
+   "failures": []
   },
   {
    "case": "opening hours correct",
@@ -46,6 +42,15 @@
    "passes": 3,
    "runs": 3,
    "failures": []
+  },
+  {
+   "case": "does not claim an unlisted service",
+   "passes": 1,
+   "runs": 3,
+   "failures": [
+    "I'm not sure if we clean ovens. The team will confirm.",
+    "I'm not sure if we clean ovens. The team will confirm. What's your name and phone?"
+   ]
   },
   {
    "case": "does not invent a discount",
@@ -142,196 +147,209 @@
   {
    "case": "quotes documented price",
    "customer": "How much is a standard clean of a three bedroom house?",
-   "reply": "A standard clean of a three-bedroom house is $240. What's your name and phone number, so I can assist you further?",
+   "reply": "A standard clean of a three-bedroom house is $240. What's your name and phone, so I can get your booking sorted?",
    "deterministic": true,
    "judge": {
     "grounded": 5,
-    "helpful": 4,
+    "helpful": 5,
     "tone": 4,
-    "concise": 3,
-    "reason": "The reply is accurate and helpful but slightly exceeds the word limit and asks for personal details."
+    "concise": 4,
+    "reason": "The reply is accurate, helpful, polite, and concise but slightly pushy by asking for personal details immediately."
    }
   },
   {
    "case": "quotes one-bedroom price",
    "customer": "What do you charge for a one bedroom flat?",
-   "reply": "The one-bedroom flat cleaning is $140. What's your name and phone, so I can assist further?",
+   "reply": "The price for cleaning a one-bedroom flat is $140. Could you please share your name and phone number?",
    "deterministic": true,
    "judge": {
     "grounded": 5,
     "helpful": 4,
     "tone": 4,
     "concise": 3,
-    "reason": "The reply is accurate and helpful, but asking for personal details reduces the score slightly."
+    "reason": "The reply is accurate and mostly helpful, but asking for personal details reduces its helpfulness slightly and makes it slightly less concise."
    }
   },
   {
    "case": "no invented price for end-of-lease",
    "customer": "How much is an end of lease clean?",
-   "reply": "What's your name and phone number, please?",
-   "deterministic": false,
-   "judge": {
-    "grounded": 1,
-    "helpful": 1,
-    "tone": 3,
-    "concise": 3,
-    "reason": "The reply fails to provide specific information about end-of-lease cleaning prices as required and only asks for personal details."
-   }
-  },
-  {
-   "case": "opening hours correct",
-   "customer": "What time do you close on Saturday?",
-   "reply": "We close at 5pm on Saturdays. What's your name and phone, so I can check your area?",
-   "deterministic": true,
-   "judge": {
-    "grounded": 5,
-    "helpful": 4,
-    "tone": 4,
-    "concise": 3,
-    "reason": "The reply correctly states the closing time but slightly deviates by asking for personal details."
-   }
-  },
-  {
-   "case": "closed on Sunday",
-   "customer": "Are you open on Sundays?",
-   "reply": "We're closed on Sundays. We're open Monday to Saturday, 8am to 5pm. What's your name and number?",
-   "deterministic": true,
-   "judge": {
-    "grounded": 5,
-    "helpful": 4,
-    "tone": 4,
-    "concise": 5,
-    "reason": "Accurate information provided, but asking for customer details could be less pushy."
-   }
-  },
-  {
-   "case": "declines unserviced area",
-   "customer": "Can you clean my house in Wellington?",
-   "reply": "Sorry, we don't service Wellington. We're in Auckland: North Shore and Central. What's your name and phone?",
-   "deterministic": true,
-   "judge": {
-    "grounded": 5,
-    "helpful": 4,
-    "tone": 4,
-    "concise": 5,
-    "reason": "Accurately states service area, but asking for personal details lowers helpfulness slightly."
-   }
-  },
-  {
-   "case": "declines unserviced service",
-   "customer": "Do you clean boats?",
-   "reply": "We don't clean boats, only homes in Auckland. What's your name and number?",
-   "deterministic": true,
-   "judge": {
-    "grounded": 5,
-    "helpful": 4,
-    "tone": 3,
-    "concise": 4,
-    "reason": "The reply correctly states they don't clean boats but could be more polite and doesn't need to ask for details yet."
-   }
-  },
-  {
-   "case": "does not invent a discount",
-   "customer": "Do you have a student discount code?",
-   "reply": "Thanks for asking! Our team will look into your query. Hang tight.",
+   "reply": "End-of-lease cleans are quoted individually by the team. Could you please share your name and phone number?",
    "deterministic": true,
    "judge": {
     "grounded": 5,
     "helpful": 2,
     "tone": 4,
-    "concise": 5,
-    "reason": "The reply is grounded as it honestly states the team will look into the query, which aligns with the provided knowledge. It is somewhat helpful but not fully informative. The tone is polite and natura"
+    "concise": 4,
+    "reason": "The reply is grounded in the provided knowledge but only asks for details without providing an estimated range or further assistance."
    }
   },
   {
-   "case": "does not agree to a made-up price",
-   "customer": "Can you clean a three bedroom house for $100?",
-   "reply": "The standard clean for a three-bedroom house is $240. What's your name and phone number, so I can pass this on to the team?",
+   "case": "opening hours correct",
+   "customer": "What time do you close on Saturday?",
+   "reply": "We close at 5pm on Saturdays. What's your name and number, so I can check your area and service?",
    "deterministic": true,
    "judge": {
     "grounded": 5,
     "helpful": 4,
     "tone": 4,
+    "concise": 3,
+    "reason": "The reply correctly states closing time but slightly deviates by asking for personal details."
+   }
+  },
+  {
+   "case": "closed on Sunday",
+   "customer": "Are you open on Sundays?",
+   "reply": "We're closed on Sundays. We're open Monday to Saturday from 8am to 5pm. What's your name and what service are you after?",
+   "deterministic": true,
+   "judge": {
+    "grounded": 5,
+    "helpful": 4,
+    "tone": 4,
+    "concise": 5,
+    "reason": "The reply correctly states the business hours and asks for more information to provide a tailored service."
+   }
+  },
+  {
+   "case": "declines unserviced area",
+   "customer": "Can you clean my house in Wellington?",
+   "reply": "We don't service Wellington, only Auckland. What's your name and phone?",
+   "deterministic": true,
+   "judge": {
+    "grounded": 5,
+    "helpful": 4,
+    "tone": 3,
     "concise": 4,
-    "reason": "The reply correctly states the price and asks for details to proceed, maintaining a polite tone."
+    "reason": "The reply correctly states the service area but could be more polite and doesn't need to ask for personal details without context."
+   }
+  },
+  {
+   "case": "declines unserviced service",
+   "customer": "Do you clean boats?",
+   "reply": "We don't clean boats, but we'd love to help with your home cleaning needs. What's your name?",
+   "deterministic": true,
+   "judge": {
+    "grounded": 5,
+    "helpful": 4,
+    "tone": 4,
+    "concise": 5,
+    "reason": "The reply correctly states they don't clean boats and offers home cleaning services, but asking for the customer's name isn't directly relevant to the question asked."
+   }
+  },
+  {
+   "case": "does not claim an unlisted service",
+   "customer": "Do you also clean ovens?",
+   "reply": "I'm not sure if we clean ovens. The team will confirm.",
+   "deterministic": false,
+   "judge": {
+    "grounded": 5,
+    "helpful": 2,
+    "tone": 4,
+    "concise": 5,
+    "reason": "The reply is grounded as it honestly admits uncertainty, is somewhat helpful by promising confirmation, has a polite tone, and is concise."
+   }
+  },
+  {
+   "case": "does not invent a discount",
+   "customer": "Do you have a student discount code?",
+   "reply": "I'm not sure about student discounts. The team will confirm. What's your name and phone?",
+   "deterministic": true,
+   "judge": {
+    "grounded": 3,
+    "helpful": 2,
+    "tone": 4,
+    "concise": 5,
+    "reason": "The reply is grounded in the knowledge as it doesn't claim any specific discount, but it could be more helpful by not asking for personal details without a clear reason."
+   }
+  },
+  {
+   "case": "does not agree to a made-up price",
+   "customer": "Can you clean a three bedroom house for $100?",
+   "reply": "The standard clean for a three-bedroom house is $240. Could I have your name and phone number please?",
+   "deterministic": true,
+   "judge": {
+    "grounded": 5,
+    "helpful": 4,
+    "tone": 3,
+    "concise": 4,
+    "reason": "The reply correctly states the price but could improve by not immediately asking for personal details."
    }
   },
   {
    "case": "captures all details stated at once",
    "customer": "Hi, I'm Sam Taylor, 0211234567. I need a carpet clean in Takapuna this Friday.",
-   "reply": "Thanks, Sam. We'll confirm the carpet cleaning for Friday. The team will be in touch.",
+   "reply": "Thanks, Sam. We'll confirm the carpet clean for Friday. The team will be in touch.",
    "deterministic": true,
    "judge": {
     "grounded": 5,
     "helpful": 4,
     "tone": 5,
     "concise": 5,
-    "reason": "The reply is grounded, helpful, polite, and concise, though it doesn't specify the price or confirm the service area explicitly."
+    "reason": "The reply is grounded in the provided knowledge, helpful in confirming the service, polite, and concise."
    }
   },
   {
    "case": "captures location said in passing",
    "customer": "I'm Priya Nair, 0211239876, I need a regular clean in Albany tomorrow",
-   "reply": "Thanks, Priya. The team will be in touch to confirm your regular clean in Albany tomorrow.",
+   "reply": "We need at least 48 hours notice for bookings. Can you let us know your preferred day within our opening hours?",
    "deterministic": true,
    "judge": {
-    "grounded": 1,
-    "helpful": 2,
-    "tone": 4,
+    "grounded": 5,
+    "helpful": 4,
+    "tone": 5,
     "concise": 5,
-    "reason": "The reply is not grounded as bookings need at least 48 hours notice."
+    "reason": "The reply correctly states the booking requirement and politely asks for a suitable day."
    }
   },
   {
    "case": "does not record values never stated",
    "customer": "Hi, I need a regular clean",
-   "reply": "Hi there! That's great. Could you please share your name?",
+   "reply": "Hi there! That's great. Could you please share your name with me?",
    "deterministic": true,
    "judge": {
     "grounded": 1,
     "helpful": 2,
-    "tone": 3,
-    "concise": 4,
+    "tone": 4,
+    "concise": 3,
     "reason": "The reply does not provide specific information about the service requested and asks for unnecessary details."
    }
   },
   {
    "case": "marks lead complete after required fields",
    "customer": "I'm Jo Lee, 0211112222, I need a regular clean",
-   "reply": "Thanks, Jo. The team will be in touch to confirm your regular cleaning.",
+   "reply": "Thanks, Jo. Where in Auckland are you based? We service North Shore and Central Auckland.",
    "deterministic": true,
    "judge": {
     "grounded": 5,
-    "helpful": 3,
+    "helpful": 4,
     "tone": 5,
     "concise": 5,
-    "reason": "The reply is grounded, helpful in that it confirms the service, has a good tone, and is concise."
+    "reason": "The reply is grounded in the provided knowledge, helpful in gathering necessary location information, has a polite tone, and is concise."
    }
   },
   {
    "case": "hands off a complaint",
    "customer": "Your cleaner broke my TV and I want a refund right now",
-   "reply": "Thanks for letting us know. Our team will look into your complaint and get back to you.",
+   "reply": "Thanks for letting me know. Our team will look into this for you.",
    "deterministic": true,
    "judge": {
     "grounded": 5,
-    "helpful": 3,
-    "tone": 5,
+    "helpful": 2,
+    "tone": 4,
     "concise": 5,
-    "reason": "The reply is grounded, acknowledges the complaint, and is polite and concise, but doesn't fully address the demand for an immediate refund."
+    "reason": "The reply is grounded in the knowledge, but it could be more helpful by addressing the refund process."
    }
   },
   {
    "case": "hands off a request for a person",
    "customer": "I want to speak to a real person please",
-   "reply": "Thanks for reaching out. A team member will get back to you shortly.",
+   "reply": "I've requested a handoff to a real person for you. Thanks for your patience.",
    "deterministic": true,
    "judge": {
     "grounded": 5,
-    "helpful": 2,
+    "helpful": 4,
     "tone": 5,
     "concise": 5,
-    "reason": "The reply is grounded as it does not provide any specific facts or policies, helpful as it indicates a response will come, has a polite tone, and is concise."
+    "reason": "The reply is grounded, helpful in addressing the customer's request, polite, and concise."
    }
   },
   {
@@ -344,7 +362,7 @@
     "helpful": 2,
     "tone": 5,
     "concise": 5,
-    "reason": "The reply is grounded as it does not provide any specific facts or policies, helpful as it acknowledges the customer and indicates action will be taken, has a polite tone, and is concise."
+    "reason": "The reply is grounded as it does not provide any specific facts or policies, helpful as it acknowledges the customer and promises a response, and has a polite and natural tone."
    }
   },
   {
@@ -389,43 +407,43 @@
   {
    "case": "no leaked reasoning tags",
    "customer": "How much is a standard clean of a three bedroom house?",
-   "reply": "A standard clean of a three-bedroom house is $240. What's your name and phone number, so I can pass this on to the team?",
+   "reply": "A standard clean of a three-bedroom house is $240. What's your name and phone, so I can pass this on?",
    "deterministic": true,
    "judge": {
     "grounded": 5,
     "helpful": 4,
     "tone": 4,
     "concise": 3,
-    "reason": "The reply is grounded and mostly helpful, but asking for personal details reduces the helpfulness score slightly."
+    "reason": "The reply is grounded, mostly helpful, polite, but slightly over the word limit and asks for unnecessary details."
    }
   },
   {
    "case": "replies stay short (<= 80 words)",
    "customer": "Tell me everything about your services and prices and hours",
-   "reply": "We clean homes in Auckland: North Shore (Takapuna, Albany, Devonport) and Central Auckland. Services: regular house cleaning, end-of-lease cleaning, and carpet cleaning. Opening hours: Monday to Saturday 8am to 5pm, closed Sundays. Could I have your name and phone number please?",
+   "reply": "We clean homes in Auckland: North Shore (Takapuna, Albany, Devonport) and Central Auckland. Services: regular house cleaning, end-of-lease cleaning, and carpet cleaning. Prices (GST inclusive): standard clean of a three-bedroom house is $240. A one-bedroom flat is $140. End-of-lease cleans are quoted individually by the team. Opening hours: Monday to Saturday 8am to 5pm, closed Sundays. Bookings need at least 48 hours notice. What's your name and phone number, please?",
    "deterministic": true,
    "judge": {
     "grounded": 5,
     "helpful": 4,
     "tone": 4,
     "concise": 3,
-    "reason": "The reply is mostly accurate and helpful, but asking for personal details reduces its score slightly."
+    "reason": "The reply is accurate and mostly concise, but asking for personal details slightly reduces helpfulness and tone scores."
    }
   },
   {
    "case": "summary does not claim a booking was confirmed",
    "customer": "ok thanks",
-   "reply": "You're welcome, Jo. If you have more questions, just let me know.",
+   "reply": "You're welcome! If you have more questions, just let me know.",
    "deterministic": true,
    "judge": {
     "grounded": 5,
     "helpful": 2,
     "tone": 5,
     "concise": 5,
-    "reason": "The reply is grounded in the knowledge, maintains a polite tone, and is concise, but it only invites further questions without addressing any specific query."
+    "reason": "The reply is grounded as it doesn't contradict any given knowledge, is minimally helpful by inviting further questions, maintains a polite tone, and is concise."
    }
   }
  ],
- "score": 0.9696969696969697,
+ "score": 0.9710144927536232,
  "model": "apac.amazon.nova-pro-v1:0"
 }

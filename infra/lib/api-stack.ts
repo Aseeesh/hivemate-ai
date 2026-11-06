@@ -200,7 +200,8 @@ export class ApiStack extends cdk.Stack {
 
     // ---- Public website chat: separate API so open CORS and tight throttling never touch the authenticated API ----
     const publicChatFn = new lambda.Function(this, 'PublicChatFn', {
-      ...common, handler: 'src.channels.web.handler', timeout: cdk.Duration.seconds(29), memorySize: 512, environment: aiEnv,
+      ...common, handler: 'src.channels.web.handler', timeout: cdk.Duration.seconds(29), memorySize: 512,
+      environment: { ...aiEnv, HOSTED_CHAT_ORIGIN: webOrigins(this)[0] ?? '' },
     });
     props.table.grantReadWriteData(publicChatFn);
     aiPolicies.forEach((st) => publicChatFn.addToRolePolicy(st));

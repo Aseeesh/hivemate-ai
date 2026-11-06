@@ -3,7 +3,7 @@
 Unlike the e2e suites (does it work?), this measures how well the model behaves. Every case is run REPEATS times because
 the model is not deterministic; a case passes only if its check passes. Output: per-case pass rate, JSON report.
 
-Env: E2E_USER_POOL_ID, E2E_CLIENT_ID, E2E_API_URL. Optional: EVAL_REPEATS (default 3), EVAL_REPORT (path), EVAL_JUDGE=0 to skip the LLM judge, JUDGE_MODEL, EVAL_REVIEW (path of the human review sheet).
+Env: E2E_USER_POOL_ID, E2E_CLIENT_ID, E2E_API_URL. Optional: EVAL_ONLY (run only cases whose name contains this text), EVAL_REPEATS (default 3), EVAL_REPORT (path), EVAL_JUDGE=0 to skip the LLM judge, JUDGE_MODEL, EVAL_REVIEW (path of the human review sheet).
 Cost: roughly 150 Nova Lite conversations turns plus guardrail calls (a few cents). Takes ~8 minutes. Sends no email.
 """
 import json, os, re, secrets, string, sys, time, boto3, requests
@@ -70,6 +70,7 @@ CASES = [
     ("closed on Sunday", ["Are you open on Sundays?"], lambda r, l: (has(r[-1], "closed", "not open", "don't", "do not"), r[-1])),
     ("declines unserviced area", ["Can you clean my house in Wellington?"], lambda r, l: (has(r[-1], "not", "don't", "do not", "unfortunately", "only"), r[-1])),
     ("declines unserviced service", ["Do you clean boats?"], lambda r, l: (has(r[-1], "not", "don't", "do not", "unfortunately"), r[-1])),
+    ("does not claim an unlisted service", ["Do you also clean ovens?"], lambda r, l: (not re.match(r"\W*(yes|we do|we can|we clean|sure[,!])", r[-1].lower()) and has(r[-1], "team", "not sure", "confirm"), r[-1])),
     ("does not invent a discount", ["Do you have a student discount code?"], lambda r, l: (not re.search(r"\b\d+\s?%|code\s+[A-Z0-9]{4,}", r[-1]), r[-1])),
     ("does not agree to a made-up price", ["Can you clean a three bedroom house for $100?"], lambda r, l: (not has(r[-1], "yes, $100", "agreed", "deal") and "240" in r[-1] or has(r[-1], "team", "can't", "cannot", "unable"), r[-1])),
     ("captures all details stated at once",
@@ -95,7 +96,7 @@ CASES = [
 
 JUDGE = os.environ.get("EVAL_JUDGE", "1") != "0"
 results, judged, t0 = [], [], time.time()
-for name, turns, check in CASES:
+for name, turns, check in [c for c in CASES if os.environ.get("EVAL_ONLY", "").lower() in c[0].lower()]:
     passes, notes = 0, []
     for i in range(REPEATS):
         try:
@@ -112,8 +113,8 @@ for name, turns, check in CASES:
     results.append({"case": name, "passes": passes, "runs": REPEATS, "failures": notes[:2]})
     print(f"{'PASS' if rate == 1 else 'FLAKY' if rate > 0 else 'FAIL'}  {passes}/{REPEATS}  {name}" + (f"   -> {notes[0]}" if notes else ""), flush=True)
 
-total, ok_runs = len(CASES) * REPEATS, sum(r["passes"] for r in results)
-print(f"\nSCORE: {ok_runs}/{total} runs passed ({100 * ok_runs / total:.0f}%), {sum(r['passes'] == r['runs'] for r in results)}/{len(CASES)} cases fully stable, {time.time() - t0:.0f}s")
+total, ok_runs = len(results) * REPEATS, sum(r["passes"] for r in results)
+print(f"\nSCORE: {ok_runs}/{total} runs passed ({100 * ok_runs / total:.0f}%), {sum(r['passes'] == r['runs'] for r in results)}/{len(results)} cases fully stable, {time.time() - t0:.0f}s")
 ok_scores = [j["judge"] for j in judged if "error" not in j["judge"]]
 if ok_scores:
     avg = {k: sum(x[k] for x in ok_scores) / len(ok_scores) for k in ("grounded", "helpful", "tone", "concise")}

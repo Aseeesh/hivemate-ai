@@ -30,6 +30,9 @@ def handler(event, _context):
             conv_id = body.get("conversationId")
             if conv_id is not None and not CONV_ID.match(str(conv_id)):
                 return _resp(400, {"error": "invalid conversationId"})
+            if body.get("audience") == "admin":  # the owner's own view: internal documents included, admin role required
+                ctx.require_admin()
+                return _resp(200, agent.handle_admin_message(ctx.tenant_id, ctx.user_id, str(body["message"])))
             # Dashboard test chat: one customer identity per signed-in user.
             conv_id = conv_id or agent.new_conv_id()
             out = agent.handle_message(ctx.tenant_id, str(body["message"]), "web", f"web:{ctx.user_id}", conv_id)

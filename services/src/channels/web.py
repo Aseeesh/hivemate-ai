@@ -36,9 +36,13 @@ def tenant_for_key(key: str) -> dict | None:
     return res["Items"][0] if res["Items"] else None
 
 
+HOSTED_ORIGIN = os.environ.get("HOSTED_CHAT_ORIGIN", "")  # Hivemate's own chat page, always allowed so owners can share its link
+SUGGESTIONS = ["What services do you offer?", "How much does it cost?", "Which areas do you cover?", "What are your opening hours?", "I'd like a quote"]
+
+
 def origin_allowed(channel: dict, origin: str) -> bool:
     allowed = channel.get("allowedOrigins") or []
-    return not allowed or origin in allowed
+    return not allowed or origin in allowed or (bool(HOSTED_ORIGIN) and origin == HOSTED_ORIGIN)
 
 
 def bump(pk: str, sk: str, ttl_seconds: int) -> int:
@@ -90,7 +94,7 @@ def handler(event, _context):
 
         if (method, path) == ("GET", "/info"):
             business = db.table().get_item(Key={"PK": pk, "SK": "META"}).get("Item", {}).get("name", "")
-            return _resp(200, {"agentName": cfg.get("agentName", "Assistant"), "business": business})
+            return _resp(200, {"agentName": cfg.get("agentName", "Assistant"), "business": business, "suggestions": SUGGESTIONS})
 
         if (method, path) == ("POST", "/chat"):
             message = str(body.get("message", "")).strip()

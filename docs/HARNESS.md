@@ -10,6 +10,18 @@ This maps the four harness areas to what Hivemate has, where it lives, and what 
 | **Runtime, security & privacy** | Untrusted input: customer text, retrieved documents and remembered details are all labelled as data in the prompt, and our delimiter tags are stripped from them. Bedrock Guardrails on input and output. Per-tenant isolation (KB metadata filter, tenant-scoped keys). Human approval: low-confidence email drafts wait for the owner; handoff silences the AI. Public chat is rate limited. Logs carry metadata only. | `common/harness.py`, `agent.py` (`guard`), `plugins/email`, `channels/web.py`, `common/llmlog.py` |
 | **Evaluation** | *Level 1* deterministic checks (22 cases x 3 runs). *Level 2* LLM-as-judge scoring grounded / helpful / tone / concise (1-5). *Level 3* human review sheet listing every reply the judge scored low or that disagrees with the string check. | `tests/eval/agent_eval.py`, `tests/eval/judge.py` |
 
+## Two audiences
+
+Every document is tagged **public** (customers may be told) or **internal** (the business's own admins only). Customer chats (website, hosted
+chat page, WhatsApp, the dashboard's Customer preview) retrieve public documents only, so internal text never reaches the model in a customer
+conversation. The dashboard's **Admin preview** retrieves everything of that business, never creates a lead, memory or owner alert, and needs the
+admin role. The public channels have no code path to admin mode (unit-tested). Filtering at retrieval is the boundary; the prompt also tells the model not to discuss internal matters.
+
+## Questions the assistant couldn't answer
+
+When a customer asks something and the reply is "the team will confirm", the question is stored as an open gap. The owner sees it on Home, writes the
+answer, and it is appended to a public `owner-answers.md` in the business's knowledge and synced. The customer's question text is cleaned of our prompt tags first.
+
 ## Memory and privacy
 
 Only WhatsApp customers are remembered (an allow-list). Anonymous web visitors and the owner's dashboard test chat never are; the first eval run with the judge showed why: the test chat reused one id, so every case looked like the same returning customer. Only `name`, `phone`

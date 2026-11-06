@@ -114,9 +114,26 @@ def handler(event, _context):
 
         if (method, path) == ("POST", "/documents"):
             ctx.require_admin()
-            out = documents.create_upload(ctx, body["filename"])
-            db.audit(ctx.pk, ctx.user_id, "document.upload_requested", {"key": out["key"]})
+            out = documents.create_upload(ctx, body["filename"], str(body.get("audience", "public")))
+            db.audit(ctx.pk, ctx.user_id, "document.upload_requested", {"key": out["key"], "audience": str(body.get("audience", "public"))})
             return _resp(200, out)
+
+        if (method, path) == ("GET", "/knowledge/gaps"):
+            ctx.require_admin()
+            return _resp(200, documents.list_gaps(ctx))
+
+        g = re.fullmatch(r"/knowledge/gaps/([0-9a-f-]+)/(answer|dismiss)", path)
+        if g and method == "POST":
+            ctx.require_admin()
+            try:
+                if g.group(2) == "answer":
+                    out = documents.answer_gap(ctx, g.group(1), str(body.get("question", "")), str(body.get("answer", "")))
+                    db.audit(ctx.pk, ctx.user_id, "knowledge.answer_added", {"gap": g.group(1)})
+                    return _resp(200, out)
+                documents.dismiss_gap(ctx, g.group(1))
+                return _resp(200, {"dismissed": g.group(1)})
+            except LookupError:
+                return _resp(404, {"error": "not found"})
 
         if (method, path) == ("POST", "/documents/sync"):
             ctx.require_admin()
@@ -125,6 +142,11 @@ def handler(event, _context):
             return _resp(202, out)
 
         m = re.fullmatch(r"/documents/([^/]+)", path)
+        if m and method == "PUT":
+            ctx.require_admin()
+            documents.set_audience(ctx, m.group(1), str(body.get("audience", "")))
+            db.audit(ctx.pk, ctx.user_id, "document.audience_changed", {"name": m.group(1), "audience": body.get("audience")})
+            return _resp(200, {"name": m.group(1), "audience": body.get("audience"), "note": "sync to apply"})
         if m and method == "DELETE":
             ctx.require_admin()
             documents.delete_document(ctx, m.group(1))

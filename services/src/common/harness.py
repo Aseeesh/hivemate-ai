@@ -19,3 +19,11 @@ def deflects(question: str, reply: str) -> bool:
     """True when the customer asked something and the reply only asks for their details.
     A reply that gives a figure, says the team will confirm, or declines is an answer, so it is left alone."""
     return bool(_QUESTION.search(question) and _ASKS_DETAILS.search(reply) and not _REAL_ANSWER.search(reply))
+
+
+_UNSURE = re.compile(r"\b(team (will|can) (confirm|get back|be in touch|follow up)|i('m| am) not sure|i don'?t have (that|the|any)|not in (my|our) (information|notes)|can'?t confirm)\b", re.I)
+
+
+def is_gap(question: str, reply: str) -> bool:
+    """The customer asked something and the assistant could only say the team will confirm: a hole in the business's knowledge."""
+    return bool(_QUESTION.search(question) and _UNSURE.search(reply))

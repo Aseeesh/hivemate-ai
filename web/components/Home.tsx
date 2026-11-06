@@ -4,6 +4,7 @@ import { api, type Conv, type Docs, type Lead, type Message, type Plugin } from 
 import { CountUp, DayBars, Segments } from '@/components/charts';
 
 type Go = (tab: 'Customers' | 'Emails' | 'Business info' | 'Features') => void;
+type Gap = { id: string; question: string; at: number };
 type Data = { leads: Lead[]; convs: Conv[]; msgs: Message[]; plugins: Plugin[]; docs: Docs; siteKey: string | null; origins: string[] };
 
 const WEEK = 7 * 86400;
@@ -15,7 +16,14 @@ const ago = (t: number) => { const m = Math.max(1, Math.round((Date.now() / 1000
 
 export default function Home({ go }: { go: Go }) {
   const [d, setD] = useState<Data | null>(null);
-  const [err, setErr] = useState('');
+  const [err, setErr] = useState(''); const [gaps, setGaps] = useState<Gap[]>([]); const [drafts, setDrafts] = useState<Record<string, { q: string; a: string }>>({}); const [note, setNote] = useState(''); const [busyGap, setBusyGap] = useState('');
+  const loadGaps = () => api<Gap[]>('GET', '/knowledge/gaps').then(setGaps).catch(() => undefined);
+  useEffect(() => { loadGaps(); }, []);
+  async function resolve(id: string, how: 'answer' | 'dismiss') {
+    const d = drafts[id]; setBusyGap(id); setNote('');
+    try { await api('POST', `/knowledge/gaps/${id}/${how}`, how === 'answer' ? { question: d?.q ?? gaps.find((g) => g.id === id)?.question, answer: d?.a ?? '' } : {}); await loadGaps(); if (how === 'answer') setNote('Saved. The assistant will know this in about a minute.'); }
+    catch (e) { setNote((e as Error).message); } finally { setBusyGap(''); }
+  }
   useEffect(() => {
     Promise.all([
       api<Lead[]>('GET', '/leads'), api<Conv[]>('GET', '/conversations'), api<Message[]>('GET', '/messages'),
@@ -65,6 +73,22 @@ export default function Home({ go }: { go: Go }) {
             <div key={m.SK} className="row" style={{ justifyContent: 'space-between' }}>
               <span>Email from <strong>{m.from}</strong> is waiting for your approval: {m.subject || '(no subject)'}</span>
               <button className="btn primary" onClick={() => go('Emails')}>Review</button>
+            </div>
+          ))}
+        </section>
+      )}
+
+      {(gaps.length > 0 || note) && (
+        <section className="card stack" aria-label="Questions to answer">
+          <h3>Questions customers asked that the assistant could not answer ({gaps.length})</h3>
+          <p className="muted" style={{ margin: 0 }}>Write the answer once and the assistant will use it from now on. It is added to your public knowledge, so only write what customers may be told.</p>
+          {note && <p className="ok" role="status">{note}</p>}
+          {gaps.slice(0, 5).map((g) => (
+            <div key={g.id} className="stack" style={{ borderTop: '1px solid var(--line)', paddingTop: 10 }}>
+              <label>Customer asked<input value={drafts[g.id]?.q ?? g.question} onChange={(e) => setDrafts({ ...drafts, [g.id]: { q: e.target.value, a: drafts[g.id]?.a ?? '' } })} /></label>
+              <label>Your answer<textarea rows={2} value={drafts[g.id]?.a ?? ''} onChange={(e) => setDrafts({ ...drafts, [g.id]: { q: drafts[g.id]?.q ?? g.question, a: e.target.value } })} placeholder="e.g. Yes, we clean ovens for $40 extra." /></label>
+              <div className="row"><button className="btn primary" disabled={busyGap === g.id || !(drafts[g.id]?.a ?? '').trim()} onClick={() => resolve(g.id, 'answer')}>Add to knowledge</button>
+                <button className="btn" disabled={busyGap === g.id} onClick={() => resolve(g.id, 'dismiss')}>Not relevant</button><span className="muted">{ago(g.at / 1000)}</span></div>
             </div>
           ))}
         </section>

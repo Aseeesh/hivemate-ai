@@ -4,7 +4,8 @@ import { api, type ChatReply, type Conv, type ConvDetail, type Lead } from '@/li
 
 const tone = (s: string) => (s === 'COMPLETE' ? 'ok' : s === 'HANDOFF' ? 'hold' : '');
 
-function TestChat({ onTurn }: { onTurn: () => void }) {
+function TestChat({ onTurn, isAdmin }: { onTurn: () => void; isAdmin: boolean }) {
+  const [mode, setMode] = useState<'customer' | 'admin'>('customer');
   const [log, setLog] = useState<{ who: 'you' | 'agent'; text: string }[]>([]);
   const [cid, setCid] = useState<string>(); const [text, setText] = useState(''); const [busy, setBusy] = useState(false);
   const [info, setInfo] = useState<ChatReply>(); const [error, setError] = useState('');
@@ -15,17 +16,22 @@ function TestChat({ onTurn }: { onTurn: () => void }) {
     e.preventDefault(); const t = text.trim(); if (!t) return;
     setBusy(true); setError(''); setText(''); setLog((l) => [...l, { who: 'you', text: t }]);
     try {
-      const r = await api<ChatReply>('POST', '/chat', { message: t, conversationId: cid });
-      setCid(r.conversationId); setInfo(r); setLog((l) => [...l, { who: 'agent', text: r.reply || '(the team has taken over this conversation)' }]); onTurn();
+      const r = await api<ChatReply>('POST', '/chat', { message: t, conversationId: mode === 'admin' ? undefined : cid, audience: mode });
+      setCid(r.conversationId); setInfo(mode === 'admin' ? undefined : r); setLog((l) => [...l, { who: 'agent', text: r.reply || '(the team has taken over this conversation)' }]); onTurn();
     } catch (err) { setError((err as Error).message); } finally { setBusy(false); }
   }
   return (
     <section className="card stack">
       <div className="row" style={{ justifyContent: 'space-between' }}>
-        <h2>Try your agent</h2>
+        <h2>Try your assistant</h2>
         <button className="btn" onClick={() => { setLog([]); setCid(undefined); setInfo(undefined); }}>New conversation</button>
       </div>
-      <p className="muted">Chat as a customer would. Needs the Conversation Agent plugin installed (Plugins tab) and documents synced.</p>
+      {isAdmin && <div className="row" role="group" aria-label="Preview as">
+        <span className="muted">Preview as:</span>
+        <button className={`btn ${mode === 'customer' ? 'primary' : ''}`} onClick={() => { setMode('customer'); setLog([]); setCid(undefined); setInfo(undefined); }}>Customer</button>
+        <button className={`btn ${mode === 'admin' ? 'primary' : ''}`} onClick={() => { setMode('admin'); setLog([]); setCid(undefined); setInfo(undefined); }}>Admin (you)</button>
+      </div>}
+      <p className="muted">{mode === 'admin' ? 'You are talking to the internal assistant. It can use your internal files too. Nothing here creates a lead or is visible to customers.' : 'Chat as a customer would. The assistant only uses files marked "Customers can see". Needs the Conversation Agent feature switched on and knowledge synced.'}</p>
       <div style={{ minHeight: 160, maxHeight: 320, overflowY: 'auto' }} className="stack" aria-live="polite">
         {log.map((m, i) => (
           <div key={i} style={{ justifySelf: m.who === 'you' ? 'end' : 'start', maxWidth: '85%', padding: '8px 12px', borderRadius: 12, background: m.who === 'you' ? 'var(--fern)' : 'var(--bg)', color: m.who === 'you' ? '#fff' : 'inherit', border: '1px solid var(--line)' }}>{m.text}</div>
@@ -34,7 +40,7 @@ function TestChat({ onTurn }: { onTurn: () => void }) {
       </div>
       {error && <p className="err" role="alert">{error}</p>}
       <form className="row" onSubmit={send}>
-        <input style={{ flex: 1, minWidth: 200 }} value={text} onChange={(e) => setText(e.target.value)} placeholder="Type a customer message" aria-label="Customer message" maxLength={1500} />
+        <input style={{ flex: 1, minWidth: 200 }} value={text} onChange={(e) => setText(e.target.value)} placeholder={mode === 'admin' ? 'Ask about your business, including internal details' : 'Type a customer message'} aria-label="Message" maxLength={1500} />
         <button className="btn primary" disabled={busy}>Send</button>
       </form>
       {info && <div className="row"><span className={`tag ${tone(info.complete ? 'COMPLETE' : info.status)}`}>{info.complete ? 'lead complete' : info.status}</span>
@@ -106,7 +112,8 @@ function WebChannel() {
           {key && <button className="btn" onClick={() => save(true)}>Rotate key</button>}
           <span role="status" className="muted">{msg}</span>
         </div>
-        {key && <><label>Embed code<input readOnly value={snippet} onFocus={(e) => e.currentTarget.select()} /></label>
+        {key && <><label>Shareable chat link (social profiles, emails, invoices, QR codes)<input readOnly value={`${typeof window !== 'undefined' ? window.location.origin : ''}/chat/?key=${key}`} onFocus={(e) => e.currentTarget.select()} /></label>
+          <label>Embed code for your website<input readOnly value={snippet} onFocus={(e) => e.currentTarget.select()} /></label>
           {!publicUrl && <p className="muted">Set NEXT_PUBLIC_PUBLIC_CHAT_URL in web/.env.local to the PublicChatUrl stack output.</p>}</>}
       </div>
     </details>
@@ -123,7 +130,7 @@ export default function Agent({ isAdmin }: { isAdmin: boolean }) {
 
   return (
     <div className="stack">
-      <TestChat onTurn={load} />
+      <TestChat onTurn={load} isAdmin={isAdmin} />
       {isAdmin && <WebChannel />}
       {isAdmin && <WhatsAppLink />}
       <section className="stack">

@@ -20,11 +20,11 @@ export async function api<T = unknown>(method: string, path: string, body?: unkn
 export type Me = { user: { id: string; email: string; role: string; platform?: boolean }; tenant: { name: string; tenantId: string; currency: string; timezone: string } };
 export type Plugin = { pluginId: string; name: string; version: string; category: string; description: string; permissions: string[]; events: string[]; installed: boolean; config?: Record<string, unknown>; configurationSchema: Record<string, { type: string; default: unknown }> };
 export type Message = { SK: string; from: string; subject: string; body: string; category: string; confidence: number; draftReply: string; status: string; sendError?: string };
-export type Doc = { name: string; size: number; modified: string };
+export type Doc = { name: string; size: number; modified: string; audience?: 'public' | 'internal' };
 export type Docs = { documents: Doc[]; lastSync: { status: string; startedAt: string } | null };
 export type Audit = { SK: string; actor: string; action: string; at: number; detail: Record<string, unknown> };
 
-export type ChatReply = { conversationId: string; reply: string; status: string; collected: Record<string, string>; complete: boolean };
+export type ChatReply = { audience?: string; conversationId: string; reply: string; status: string; collected: Record<string, string>; complete: boolean };
 export type Lead = { SK: string; convId: string; channel: string; customer: string; collected: Record<string, string>; status: string; handoffReason?: string; notes?: string; summary?: string; updatedAt: number };
 export type Conv = { convId: string; channel: string; customer: string; status: string; collected: Record<string, string>; turns: number; lastAt: number; createdAt?: number };
 export type ConvDetail = { conversation: Conv; turns: { role: string; text: string; at: number }[] };
