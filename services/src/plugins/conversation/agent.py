@@ -15,6 +15,7 @@ from botocore.exceptions import ClientError
 from src.common import db, llmlog, mailer
 from src.common.harness import deflects, is_gap, untrusted
 from src.common.knowledge import NO_KNOWLEDGE, retrieve
+from src.pipeline import deals
 from src.plugins.conversation import memory
 
 bedrock = boto3.client("bedrock-runtime")
@@ -262,6 +263,14 @@ def notify_owner(pk: str, business: str, cfg: dict, kind: str, lead: dict, summa
         return str(exc)[:200]
 
 
+def track(pk: str, conv_id: str, channel: str, customer: str, collected: dict, handoff: bool) -> None:
+    """Keep the follow-up pipeline in step with the chat. A pipeline fault must never break the customer's reply."""
+    try:
+        deals.on_chat_turn(pk, conv_id, channel, customer, collected, handoff)
+    except Exception as exc:  # noqa: BLE001
+        print(json.dumps({"level": "ERROR", "event": "pipeline_track_failed", "error": repr(exc)[:200]}))
+
+
 # ---------- entry point ----------
 def handle_message(tenant_id: str, text: str, channel: str, customer: str, conv_id: str | None = None, customer_name: str = "") -> dict:
     pk = f"TENANT#{tenant_id}"
@@ -293,6 +302,8 @@ def handle_message(tenant_id: str, text: str, channel: str, customer: str, conv_
         store_turn(pk, conv_id, "user", text, seq)
         conv["turns"] += 1; conv["lastAt"] = now
         db.table().put_item(Item=db.to_ddb(conv))
+        if conv["status"] == "HANDOFF":
+            track(pk, conv_id, channel, customer, conv["collected"], True)  # the customer wrote again: still waiting for a person
         return {"conversationId": conv_id, "reply": HANDOFF_TEXT if conv["status"] == "HANDOFF" else "", "status": conv["status"], "collected": conv["collected"], "complete": False}
 
     blocked, _ = guard(text, "INPUT")
@@ -356,6 +367,7 @@ def handle_message(tenant_id: str, text: str, channel: str, customer: str, conv_
     db.table().put_item(Item=db.to_ddb(conv))
     db.table().put_item(Item=db.to_ddb(lead))
     memory.save(pk, channel, customer, conv["collected"])
+    track(pk, conv_id, channel, customer, conv["collected"], bool(state["handoff"]))
     db.audit(pk, "plugin:conversation-agent", "conversation.turn", {"convId": conv_id, "channel": channel, "complete": complete, "handoff": bool(state["handoff"])})
     return {"conversationId": conv_id, "reply": reply, "status": conv["status"], "collected": conv["collected"], "complete": complete}
 

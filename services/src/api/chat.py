@@ -7,6 +7,7 @@ from botocore.exceptions import ClientError
 
 from src.common import db
 from src.common.context import Forbidden, from_event
+from src.pipeline import deals
 from src.plugins.conversation import agent
 
 CONV_ID = re.compile(r"^[a-f0-9]{8,40}$")
@@ -68,6 +69,12 @@ def handler(event, _context):
             if lead and lead.get("status") == "HANDOFF":
                 db.table().update_item(Key=lead_key, UpdateExpression="SET #s = :s, handoffReason = :r", ExpressionAttributeNames={"#s": "status"},
                                        ExpressionAttributeValues={":s": "COLLECTING" if status == "OPEN" else "CLOSED", ":r": ""})
+            try:  # the owner took over (resumed or closed): the customer is no longer waiting on us
+                d = deals.get(ctx.pk, m.group(1))
+                if d and d.get("awaiting") == "business":
+                    deals.on_outbound(ctx.pk, m.group(1), "owner")
+            except Exception as exc:  # noqa: BLE001
+                print(json.dumps({"level": "ERROR", "event": "pipeline_track_failed", "error": repr(exc)[:200]}))
             db.audit(ctx.pk, ctx.user_id, "conversation.status", {"convId": m.group(1), "status": status})
             return _resp(200, {"status": status})
 

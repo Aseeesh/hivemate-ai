@@ -69,3 +69,10 @@ nav.tabs button { transition: color .15s, border-color .15s; }
 .cc-form { display:flex; gap:8px; padding:10px; border-top:1px solid var(--line); } .cc-form button { font:inherit; padding:0 18px; border:0; border-radius:8px; background:var(--fern); color:#fff; cursor:pointer; } .cc-form button:disabled { opacity:.5; }
 .cc-foot { display:flex; justify-content:space-between; gap:10px; flex-wrap:wrap; padding:0 14px 10px; font-size:11px; color:var(--muted); }
 button.linklike { background:none; border:0; padding:0; font:inherit; color:var(--fern); text-decoration:underline; cursor:pointer; }
+
+/* ---- Hivemate 2.0 ---- */
+button.btn[aria-pressed=true] { border-color:var(--fern); background:color-mix(in srgb,var(--fern) 14%,var(--panel)); font-weight:600; }
+button.kpi { text-align:left; font:inherit; color:inherit; cursor:pointer; width:100%; } button.kpi:hover { border-color:var(--fern); }
+.src { font:500 11px ui-monospace,Menlo,monospace; padding:1px 6px; border-radius:5px; background:color-mix(in srgb,var(--s1) 14%,transparent); color:var(--ink); }
+.subtabs { display:flex; gap:6px; flex-wrap:wrap; }
+.lockrow { display:grid; grid-template-columns:minmax(140px,220px) 1fr; gap:10px; align-items:center; }

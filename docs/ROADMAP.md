@@ -20,3 +20,14 @@
 - [ ] Booking plugin + Step Functions workflow
 - [ ] Phase 6: CloudWatch dashboard, X-Ray, per-tenant usage metering, load tests, CI deploy via OIDC role
 - [ ] Phase 7: threat model, Well-Architected review, cost analysis, demo tenants (SparkClean NZ, Auckland Property Services, Kiwi Retail)
+
+## Hivemate 2.0 (see PLAN-2.0.md, BACKLOG-2.0.md, GO-LIVE.md)
+- [x] Deal pipeline, follow-up sweeper, policy (assist/approve/automate), work queue API and dashboard
+- [x] Event-derived impact metrics, Ask page with sources, unified inbox, Customer 360, packs
+- [x] Connector runtime, Microsoft 365, Xero, webhooks with signature checks, integration health
+- [x] Document intelligence (Textract AnalyzeExpense) with GST/duplicate/Xero checks and approval
+- [x] Platform console no longer scans the table per request (hourly rollup + per-tenant query)
+- [x] Cross-tenant forged-id tests for every new route
+- [ ] Live verification of Microsoft 365, Xero, WhatsApp, SES production, dashboard auth (docs/GO-LIVE.md)
+- [ ] Visual workflow builder (deferred on purpose: build only if pilots ask to change the flows themselves)
+- [ ] Customer pilots (cleaning company first) and the success metrics in BACKLOG-2.0.md

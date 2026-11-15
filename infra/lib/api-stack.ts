@@ -4,7 +4,10 @@ import { HttpJwtAuthorizer } from 'aws-cdk-lib/aws-apigatewayv2-authorizers';
 import { HttpLambdaIntegration } from 'aws-cdk-lib/aws-apigatewayv2-integrations';
 import * as cognito from 'aws-cdk-lib/aws-cognito';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
+import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 import * as events from 'aws-cdk-lib/aws-events';
+import * as targets from 'aws-cdk-lib/aws-events-targets';
+import * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as kms from 'aws-cdk-lib/aws-kms';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
@@ -48,6 +51,21 @@ export class ApiStack extends cdk.Stack {
       // In the SES sandbox AWS also authorizes against each (verified) recipient identity, hence the wildcard.
       resources: [`arn:aws:ses:${this.region}:${this.account}:identity/*`],
     });
+    // Connector credentials: one Secrets Manager secret per business and provider (created at connect time), plus ONE operator secret
+    // `<prefix>/apps` holding the OAuth client ids/secrets and webhook key. Fill it with `aws secretsmanager put-secret-value` (docs/GO-LIVE.md).
+    const secretPrefix = `hivemate/${this.node.tryGetContext('stage') as string}`;
+    const appSecret = new secretsmanager.Secret(this, 'ConnectorApps', {
+      secretName: `${secretPrefix}/apps`,
+      description: 'OAuth client ids/secrets and webhook keys for Microsoft 365 and Xero (JSON object). Operator-managed.',
+      secretStringValue: cdk.SecretValue.unsafePlainText('{}'),
+      encryptionKey: props.dataKey,
+    });
+    const connectorSecrets = [
+      new iam.PolicyStatement({
+        actions: ['secretsmanager:CreateSecret', 'secretsmanager:PutSecretValue', 'secretsmanager:GetSecretValue', 'secretsmanager:DeleteSecret', 'secretsmanager:DescribeSecret'],
+        resources: [`arn:aws:secretsmanager:${this.region}:${this.account}:secret:${secretPrefix}/*`],
+      }),
+    ];
     const common = {
       runtime: lambda.Runtime.PYTHON_3_13,
       code,
@@ -62,15 +80,25 @@ export class ApiStack extends cdk.Stack {
         SENDER_EMAIL: senderEmail,
         KNOWLEDGE_BASE_ID: props.knowledgeBaseId,
         DATA_SOURCE_ID: props.dataSourceId,
+        SECRET_PREFIX: secretPrefix,
+        SECRETS_KMS_KEY_ID: props.dataKey.keyId,
       },
+    };
+    const grantConnectorAccess = (fn: lambda.Function) => {
+      connectorSecrets.forEach((st) => fn.addToRolePolicy(st));
+      // Identity-based statements only: granting through the key policy would make the data stack depend on this one.
+      fn.addToRolePolicy(new iam.PolicyStatement({ actions: ['kms:Decrypt', 'kms:GenerateDataKey', 'kms:DescribeKey'], resources: [props.dataKey.keyArn] }));
+      fn.addToRolePolicy(new iam.PolicyStatement({ actions: ['secretsmanager:GetSecretValue'], resources: [appSecret.secretArn] }));
     };
 
     // ---- Control-plane API: tenants, plugin registry, per-tenant plugin config ----
     const apiFn = new lambda.Function(this, 'ApiFn', {
       ...common,
       handler: 'src.api.handler.handler',
-      timeout: cdk.Duration.seconds(15),
+      timeout: cdk.Duration.seconds(25),
     });
+    grantConnectorAccess(apiFn); // start/disconnect a connection, send from the owner's mailbox on approval
+    apiFn.addToRolePolicy(new iam.PolicyStatement({ actions: ['textract:AnalyzeExpense'], resources: ['*'] })); // document intelligence
     props.table.grantReadWriteData(apiFn);
     props.bus.grantPutEventsTo(apiFn);
     apiFn.addToRolePolicy(sendMail);
@@ -160,6 +188,32 @@ export class ApiStack extends cdk.Stack {
     whatsappFn.addPermission('FromSns', { principal: new iam.ServicePrincipal('sns.amazonaws.com'), sourceAccount: this.account });
     new cdk.CfnOutput(this, 'WhatsAppFnArn', { value: whatsappFn.functionArn });
 
+    // ---- Scheduled worker: follow-up sweep, connector sync, hourly platform rollup. Also invoked (async) by verified webhooks. ----
+    const workerFn = new lambda.Function(this, 'SweeperFn', {
+      ...common, handler: 'src.workers.sweeper.handler', timeout: cdk.Duration.minutes(5), memorySize: 512,
+    });
+    props.table.grantReadWriteData(workerFn);
+    props.bus.grantPutEventsTo(workerFn); // inbound Outlook mail is handed to the Email Automation worker as email.received
+    workerFn.addToRolePolicy(sendMail);
+    grantConnectorAccess(workerFn);
+    new events.Rule(this, 'SweepRule', {
+      schedule: events.Schedule.rate(cdk.Duration.minutes(15)),
+      targets: [new targets.LambdaFunction(workerFn, { retryAttempts: 1 })],
+    });
+    new cloudwatch.Alarm(this, 'SweeperErrors', {
+      metric: workerFn.metricErrors({ period: cdk.Duration.minutes(15) }), threshold: 1, evaluationPeriods: 2,
+      alarmDescription: 'Follow-up / connector worker is failing: follow-ups and syncs are not running',
+    });
+
+    // OAuth callback and provider webhooks: public by necessity, each proves itself (single-use state / signature).
+    const webhooksFn = new lambda.Function(this, 'WebhooksFn', {
+      ...common, handler: 'src.channels.webhooks.handler', timeout: cdk.Duration.seconds(20), memorySize: 256,
+      environment: { ...common.environment, DASHBOARD_URL: webOrigins(this)[0] ?? '', WORKER_FN: workerFn.functionName },
+    });
+    props.table.grantReadWriteData(webhooksFn);
+    grantConnectorAccess(webhooksFn);
+    workerFn.grantInvoke(webhooksFn);
+
     // ---- HTTP API with Cognito JWT authorizer ----
     const authorizer = new HttpJwtAuthorizer('Jwt',
       `https://cognito-idp.${this.region}.amazonaws.com/${props.userPool.userPoolId}`,
@@ -214,6 +268,11 @@ export class ApiStack extends cdk.Stack {
     publicApi.addRoutes({ path: '/info', methods: [apigwv2.HttpMethod.GET], integration: publicInt });
     publicApi.addRoutes({ path: '/chat', methods: [apigwv2.HttpMethod.POST], integration: publicInt });
     publicApi.addRoutes({ path: '/integrations/email/suggest', methods: [apigwv2.HttpMethod.POST], integration: publicInt });
+    const webhooksInt = new HttpLambdaIntegration('WebhooksInt', webhooksFn);
+    publicApi.addRoutes({ path: '/oauth/{provider}/callback', methods: [apigwv2.HttpMethod.GET], integration: webhooksInt });
+    publicApi.addRoutes({ path: '/webhooks/{provider}', methods: [apigwv2.HttpMethod.POST], integration: webhooksInt });
+    // The public base URL providers call back to; the API and worker need it to build redirect and subscription URLs.
+    [apiFn, webhooksFn, workerFn].forEach((fn) => { fn.addEnvironment('OAUTH_REDIRECT_BASE', publicApi.apiEndpoint); fn.addEnvironment('WEBHOOK_BASE', publicApi.apiEndpoint); });
     // Burst/steady limits across the whole public API; the account-wide Lambda quota is small.
     (publicApi.defaultStage!.node.defaultChild as apigwv2.CfnStage).defaultRouteSettings = { throttlingBurstLimit: 10, throttlingRateLimit: 5 };
     new cdk.CfnOutput(this, 'PublicChatUrl', { value: publicApi.apiEndpoint });

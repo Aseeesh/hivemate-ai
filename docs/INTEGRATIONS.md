@@ -27,6 +27,14 @@ Customers → "Connect a WhatsApp number": choose *Only outside my opening hours
 - A person taking over: mark the conversation as handed off in the dashboard and the assistant stays quiet until it is handed back.
 - Not built: detecting that the owner replied from their own app (needs Meta's message-echo webhook).
 
+## Microsoft 365 (Outlook): connector
+Integrations > Connect. Hivemate reads new mail in the inbox (a new connection only looks at the last 24 hours, never old mail), ignores no-reply senders, drafts a reply for approval, and on approval sends it **from the owner's own mailbox**. Push notifications make it near-instant; without them it polls every 15 minutes, and a daily reconcile re-reads three days to repair anything missed. If Microsoft revokes access the card shows "Needs reconnecting" and the owner is emailed.
+
+## Xero: connector
+Integrations > Connect. Hivemate reads overdue sales invoices and the contact's email, prepares a reminder (gentle 1-7 days, firm 8-30, final 31+), and after one is sent adds a history note to the invoice in Xero. When Xero shows the invoice paid (or no longer outstanding) the open reminders close themselves. Financial records stay in Xero; Hivemate keeps only number, customer, amount and due date.
+
 ## Honest limits
 - The Gmail script and the WhatsApp number need the owner's own Google and Meta accounts, which only they can authorise.
 - Quiet-hours mode is Monday to Friday with one start and end time.
+- Follow-ups can only be emailed. A chat or WhatsApp lead with no email address gets a task with a draft the owner copies, then marks done. WhatsApp cannot be automated for follow-ups yet: Meta only allows free-form messages within 24 hours of the customer's last message, so a follow-up a day later needs a pre-approved message template (not built).
+- Both connectors are tested against recorded provider responses, not live accounts. See docs/GO-LIVE.md before relying on them.

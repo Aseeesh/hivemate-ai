@@ -8,8 +8,11 @@ import uuid
 import boto3
 from botocore.exceptions import ClientError
 
-from src.api import documents, integrations
-from src.common import db, mailer, plugins
+from src.api import business, connections, documents, integrations, workqueue
+from src.common import db, events as biz_events, mailer, plugins
+from src.connectors import runtime
+from src.connectors.http import HttpError
+from src.pipeline import deals
 from src.common.context import Forbidden, from_event
 
 events = boto3.client("events")
@@ -27,6 +30,11 @@ def handler(event, _context):
     try:
         ctx = from_event(event)
         body = json.loads(event["body"]) if event.get("body") else {}
+
+        for module in (workqueue, connections, business):
+            res = module.route(ctx, method, path, body, event.get("queryStringParameters") or {})
+            if res is not None:
+                return _resp(res["statusCode"], res["body"])
 
         if (method, path) == ("GET", "/me"):
             meta = db.table().get_item(Key={"PK": ctx.pk, "SK": "META"}).get("Item", {})
@@ -91,7 +99,16 @@ def handler(event, _context):
             new_status = "REJECTED"
             if m.group(2) == "approve":
                 new_status = "SENT_SIMULATED"
-                if mailer.enabled():
+                via = None
+                if item.get("source") == "microsoft365":  # the enquiry came from their Outlook: answer from their Outlook
+                    try:
+                        via = runtime.try_send_mail(ctx.pk, item["from"], item["subject"], item["draftReply"], idem_key=f"msg-{m.group(1)}")
+                    except (RuntimeError, HttpError, runtime.Conflict) as exc:
+                        db.audit(ctx.pk, ctx.user_id, "message.send_failed", {"messageId": m.group(1), "error": str(exc)[:200]})
+                        return _resp(502, {"error": f"Email could not be sent: {exc}"})
+                if via:
+                    new_status = "SENT"
+                elif mailer.enabled():
                     meta = db.table().get_item(Key={"PK": ctx.pk, "SK": "META"}).get("Item", {})
                     plug = db.table().get_item(Key={"PK": ctx.pk, "SK": "PLUGIN#email-automation"}).get("Item", {})
                     try:
@@ -107,6 +124,13 @@ def handler(event, _context):
                 ExpressionAttributeValues={":s": new_status, ":u": ctx.user_id},
             )
             db.audit(ctx.pk, ctx.user_id, f"message.{m.group(2)}", {"messageId": m.group(1)})
+            if m.group(2) == "approve":
+                try:  # the reply is out: start the follow-up clock and count the approval
+                    deal_id = deals.email_deal_id(item["from"])
+                    deals.on_outbound(ctx.pk, deal_id, "approved_draft")
+                    biz_events.record(ctx.pk, "approval_completed", deal_id, message=m.group(1))
+                except Exception as exc:  # noqa: BLE001 - never turn a sent email into an error response
+                    print(json.dumps({"level": "ERROR", "event": "pipeline_track_failed", "error": repr(exc)[:200]}))
             return _resp(200, {"status": new_status})
 
         if (method, path) == ("GET", "/documents"):

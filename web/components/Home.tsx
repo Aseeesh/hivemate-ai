@@ -1,9 +1,9 @@
 'use client';
 import { useEffect, useState } from 'react';
-import { api, type Conv, type Docs, type Lead, type Message, type Plugin } from '@/lib/api';
+import { api, type Conv, type Docs, type Lead, type Message, type Plugin, type WorkSummary } from '@/lib/api';
 import { CountUp, DayBars, Segments } from '@/components/charts';
 
-type Go = (tab: 'Customers' | 'Emails' | 'Business info' | 'Features') => void;
+type Go = (tab: 'Work Queue' | 'Conversations' | 'Knowledge' | 'Settings' | 'Impact' | 'Integrations', filter?: string) => void;
 type Gap = { id: string; question: string; at: number };
 type Data = { leads: Lead[]; convs: Conv[]; msgs: Message[]; plugins: Plugin[]; docs: Docs; siteKey: string | null; origins: string[] };
 
@@ -18,7 +18,8 @@ export default function Home({ go }: { go: Go }) {
   const [d, setD] = useState<Data | null>(null);
   const [err, setErr] = useState(''); const [gaps, setGaps] = useState<Gap[]>([]); const [drafts, setDrafts] = useState<Record<string, { q: string; a: string }>>({}); const [note, setNote] = useState(''); const [busyGap, setBusyGap] = useState('');
   const loadGaps = () => api<Gap[]>('GET', '/knowledge/gaps').then(setGaps).catch(() => undefined);
-  useEffect(() => { loadGaps(); }, []);
+  const [work, setWork] = useState<WorkSummary | null>(null);
+  useEffect(() => { loadGaps(); api<{ summary: WorkSummary }>('GET', '/work').then((r) => setWork(r.summary)).catch(() => undefined); }, []);
   async function resolve(id: string, how: 'answer' | 'dismiss') {
     const d = drafts[id]; setBusyGap(id); setNote('');
     try { await api('POST', `/knowledge/gaps/${id}/${how}`, how === 'answer' ? { question: d?.q ?? gaps.find((g) => g.id === id)?.question, answer: d?.a ?? '' } : {}); await loadGaps(); if (how === 'answer') setNote('Saved. The assistant will know this in about a minute.'); }
@@ -43,10 +44,10 @@ export default function Home({ go }: { go: Go }) {
   const waitingDrafts = d.msgs.filter((m) => m.status === 'PENDING_APPROVAL');
   const installed = (id: string) => d.plugins.some((p) => p.pluginId === id && p.installed);
   const steps = [
-    { done: d.docs.documents.length > 0, title: 'Tell the assistant about your business', text: 'Upload your prices, services, areas and opening hours. It only answers from these.', tab: 'Business info' as const },
-    { done: installed('conversation-agent'), title: 'Turn on the customer assistant', text: 'Switch on the assistant that answers customers and captures their details.', tab: 'Features' as const },
-    { done: !!d.siteKey, title: 'Put the chat on your website', text: 'Copy one line of code into your site. Customers can then chat with you any time.', tab: 'Customers' as const },
-    { done: installed('email-automation'), title: 'Let it draft email replies (optional)', text: 'Replies it is unsure about wait for your approval. Nothing is sent without your say-so.', tab: 'Features' as const },
+    { done: d.docs.documents.length > 0, title: 'Tell the assistant about your business', text: 'Upload your prices, services, areas and opening hours. It only answers from these.', tab: 'Knowledge' as const },
+    { done: installed('conversation-agent'), title: 'Turn on the customer assistant', text: 'Switch on the assistant that answers customers and captures their details.', tab: 'Settings' as const },
+    { done: !!d.siteKey, title: 'Put the chat on your website', text: 'Copy one line of code into your site. Customers can then chat with you any time.', tab: 'Conversations' as const },
+    { done: installed('email-automation'), title: 'Let it draft email replies (optional)', text: 'Replies it is unsure about wait for your approval. Nothing is sent without your say-so.', tab: 'Settings' as const },
   ];
   const todo = steps.filter((s) => !s.done);
   const needs = waitingPeople.length + waitingDrafts.length;
@@ -60,19 +61,28 @@ export default function Home({ go }: { go: Go }) {
         <p>It answers your customers&apos; questions at any hour using your own prices and hours, collects the details of anyone who wants a job done, and tells you about it. It never makes up a price, and anything sensitive goes to you.</p>
       </section>
 
+      {work && (
+        <section className="grid" aria-label="Work queue" style={{ gridTemplateColumns: 'repeat(auto-fit,minmax(190px,1fr))' }}>
+          <button className="card kpi" onClick={() => go('Work Queue')}><div className="hero-num"><CountUp value={work.open} /></div><div>Things to do</div><div className="muted">{work.urgent} urgent · open the Work Queue</div></button>
+          <button className="card kpi" onClick={() => go('Work Queue', 'reply_overdue')}><div className="hero-num"><CountUp value={work.byType.reply_overdue ?? 0} /></div><div>Customers waiting for a reply</div></button>
+          <button className="card kpi" onClick={() => go('Work Queue', 'follow_up')}><div className="hero-num"><CountUp value={work.byType.follow_up ?? 0} /></div><div>Follow-ups ready</div></button>
+          <button className="card kpi" onClick={() => go('Impact')}><div className="hero-num"><CountUp value={work.needsApproval} /></div><div>Waiting for your approval</div><div className="muted">See business impact</div></button>
+        </section>
+      )}
+
       {needs > 0 && (
         <section className="card stack" aria-label="Needs you">
           <h3>Needs you ({needs})</h3>
           {waitingPeople.map((l) => (
             <div key={l.SK} className="row" style={{ justifyContent: 'space-between' }}>
               <span><strong>{l.collected.name || 'A customer'}</strong> needs a person: {l.handoffReason || 'asked for a human'} <span className="muted">· {ago(l.updatedAt)}</span></span>
-              <button className="btn primary" onClick={() => go('Customers')}>Open</button>
+              <button className="btn primary" onClick={() => go('Conversations')}>Open</button>
             </div>
           ))}
           {waitingDrafts.map((m) => (
             <div key={m.SK} className="row" style={{ justifyContent: 'space-between' }}>
               <span>Email from <strong>{m.from}</strong> is waiting for your approval: {m.subject || '(no subject)'}</span>
-              <button className="btn primary" onClick={() => go('Emails')}>Review</button>
+              <button className="btn primary" onClick={() => go('Conversations')}>Review</button>
             </div>
           ))}
         </section>
@@ -119,7 +129,7 @@ export default function Home({ go }: { go: Go }) {
             <p className="muted" style={{ margin: 0 }}>The chat is live for:</p>
             {d.origins.length ? d.origins.map((o) => <div key={o} className="mono">{o}</div>) : <div className="muted">Any website (not restricted yet)</div>}
           </> : <p className="muted" style={{ margin: 0 }}>The chat is not on a website yet.</p>}
-          <button className="btn" onClick={() => go('Customers')}>{d.siteKey ? 'Manage website chat' : 'Add chat to your website'}</button>
+          <button className="btn" onClick={() => go('Conversations')}>{d.siteKey ? 'Manage website chat' : 'Add chat to your website'}</button>
         </div>
         <div className="card stack">
           <h3>What the assistant knows</h3>
@@ -128,18 +138,18 @@ export default function Home({ go }: { go: Go }) {
             {d.docs.documents.length > 5 && <span className="muted">+ {d.docs.documents.length - 5} more</span>}
             <span className="muted">{d.docs.lastSync ? `Last learned: ${d.docs.lastSync.status.toLowerCase()}` : 'Not learned yet: press Sync in Business info'}</span>
           </> : <p className="muted" style={{ margin: 0 }}>No documents yet. Upload your prices, services and hours.</p>}
-          <button className="btn" onClick={() => go('Business info')}>Manage</button>
+          <button className="btn" onClick={() => go('Knowledge')}>Manage</button>
         </div>
         <div className="card stack">
           <h3>Switched on</h3>
           {d.plugins.filter((p) => p.installed).map((p) => <div key={p.pluginId}>✓ {p.name}</div>)}
           {!d.plugins.some((p) => p.installed) && <p className="muted" style={{ margin: 0 }}>Nothing yet.</p>}
-          <button className="btn" onClick={() => go('Features')}>Manage</button>
+          <button className="btn" onClick={() => go('Settings')}>Manage</button>
         </div>
       </section>
 
       <section className="card stack" aria-label="Recent enquiries">
-        <div className="row" style={{ justifyContent: 'space-between' }}><h3>Recent enquiries</h3><button className="btn" onClick={() => go('Customers')}>See all and read the chats</button></div>
+        <div className="row" style={{ justifyContent: 'space-between' }}><h3>Recent enquiries</h3><button className="btn" onClick={() => go('Conversations')}>See all and read the chats</button></div>
         {!recent.length && <p className="muted">No enquiries yet.</p>}
         {recent.map((l) => (
           <div key={l.SK} className="row" style={{ justifyContent: 'space-between', borderTop: '1px solid var(--line)', paddingTop: 8 }}>
