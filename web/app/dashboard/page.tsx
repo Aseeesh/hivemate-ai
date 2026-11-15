@@ -66,6 +66,11 @@ export default function Dashboard() {
   const go = (t: Tab, f = '') => {
     if (t === 'Conversations' && (CONV as readonly string[]).includes(f)) { setConv(f as (typeof CONV)[number]); f = ''; }
     setFilter(f); setTab(t); window.scrollTo(0, 0);
+    // On a phone the menu is one scrolling row: keep the chosen item in view.
+    requestAnimationFrame(() => {
+      const el = document.querySelector<HTMLElement>('.side [aria-current=page]'), side = el?.closest<HTMLElement>('.side');
+      if (el && side) side.scrollTo({ left: el.offsetLeft - side.clientWidth / 2 + el.clientWidth / 2 }); // horizontal only: never moves the page
+    });
   };
   const current = NAV.flatMap((g) => g.items).find((i) => i.tab === tab)!;
   const badge = (t: Tab) => (t === 'Work Queue' && badges.work ? <span className={`nbadge ${badges.urgent ? 'bad' : ''}`} aria-label={`${badges.work} open`}>{badges.work}</span>
@@ -76,7 +81,7 @@ export default function Dashboard() {
     <div className="shell">
       <aside className="side">
         <div className="brand"><i className="hex"><Icon name="bolt" size={15} /></i><span>Hivemate</span></div>
-        <div className="groups" style={{ display: 'grid', gap: 16 }}>
+        <div className="groups">
           {NAV.map((g) => (
             <div key={g.group}><h4>{g.group}</h4>
               <nav aria-label={g.group}>{g.items.map((i) => (
