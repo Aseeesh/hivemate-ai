@@ -48,6 +48,21 @@ Default model: `apac.amazon.nova-pro-v1:0` (change in `infra/cdk.json`). It scor
 
 See `docs/ROADMAP.md` for what is next.
 
+## Hivemate 2.0: follow-up, work queue, connectors, impact
+
+Hivemate sits on top of the software a business already uses and makes sure nothing is forgotten. Plan and status: `docs/PLAN-2.0.md`; what the owner must still do: `docs/GO-LIVE.md`.
+
+- **Deals and follow-ups** (`services/src/pipeline/`): every enquiry (chat, email, Outlook) becomes a deal that records who owes the next move. A 15-minute worker (`workers/sweeper.py`) turns "customer went quiet" into a follow-up task, flags enquiries nobody answered, and marks leads cold after the configured number of follow-ups. A reply after a follow-up counts as a recovered lead.
+- **Control**: per action the owner chooses assist, approve or automate (`common/policy.py`). Quotes and refunds can never be automated; automatic sends only happen in business hours to customers with an email address; the last invoice reminder always needs a person. Every automation can be paused.
+- **Work Queue**: one list of what needs a person (approve, edit, snooze, assign, dismiss, retry).
+- **Connectors** (`services/src/connectors/`): shared runtime for OAuth, token refresh, checkpointed sync, 24-hourly reconciliation, idempotent writes, retries and health alerts. Microsoft 365 (read inbox, send and draft) and Xero (read overdue invoices, write a history note). Tokens live in Secrets Manager.
+- **Impact**: every figure is counted from recorded events; time saved is an estimate from the owner's own minutes-per-task and is labelled as one. Cost per task is deliberately not shown.
+- **Also**: unified inbox, Customer 360 (each item labelled with the system it came from), automation packs, invoice/receipt reading (Textract) with GST and duplicate checks, and an Ask page that answers only from fixed queries and shows its sources.
+- **Not built, by design**: a visual workflow builder. The three flows are fixed and tuned; the owner edits their timing, wording mode and pauses.
+
+New routes (authenticated API): `GET /work`, `POST /work/{id}/approve|reject|done|snooze|assign`, `GET /deals`, `POST /deals/{id}/stage|assign`, `GET|PUT /policy`, `GET /inbox`, `GET /impact`, `POST /ask`, `GET /team`, `GET /customers[/{key}]`, `GET /packs`, `POST /packs/{id}/enable`, `GET|POST /extract`, `POST /extract/upload`, `GET /connections`, `POST /connections/{provider}/start|sync`, `DELETE /connections/{provider}`.
+Public API: `GET /oauth/{provider}/callback`, `POST /webhooks/{provider}`.
+
 ## Conversation agent (WhatsApp / web chat)
 
 Plugin `conversation-agent`: a multi-turn agent that answers from the tenant knowledge base, collects lead details

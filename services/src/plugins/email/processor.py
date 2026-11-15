@@ -7,7 +7,7 @@ import time
 import boto3
 from botocore.exceptions import ClientError
 
-from src.common import db, llmlog, mailer
+from src.common import db, events, llmlog, mailer
 from src.common.knowledge import NO_KNOWLEDGE, retrieve
 
 bedrock = boto3.client("bedrock-runtime")
@@ -90,10 +90,14 @@ def process(detail: dict) -> None:
         if mailer.enabled():
             meta = db.table().get_item(Key={"PK": pk, "SK": "META"}).get("Item", {})
             try:
-                ses_id = mailer.send_reply(business=meta.get("name", ""), to=detail["from"], subject=detail["subject"],
-                                           body=result["reply"], reply_to=config["sendFrom"])
+                if detail.get("source") == "microsoft365":  # reply from the owner's own Outlook mailbox
+                    from src.connectors import runtime
+                    ses_id = runtime.try_send_mail(pk, detail["from"], detail["subject"], result["reply"], idem_key=f"msg-{message_id}") or ""
+                if not ses_id:
+                    ses_id = mailer.send_reply(business=meta.get("name", ""), to=detail["from"], subject=detail["subject"],
+                                               body=result["reply"], reply_to=config["sendFrom"])
                 status = "SENT"
-            except (ClientError, ValueError) as exc:  # e.g. SES sandbox recipient not verified: keep it for a human
+            except (ClientError, ValueError, RuntimeError) as exc:  # e.g. SES sandbox recipient not verified: keep it for a human
                 send_error = str(exc)[:300]
         else:
             status = "SENT_SIMULATED"
@@ -104,11 +108,26 @@ def process(detail: dict) -> None:
         "category": result["category"], "confidence": result["confidence"],
         "draftReply": result["reply"], "status": status, "createdAt": int(time.time()),
         **({"sendError": send_error} if send_error else {}), **({"sesMessageId": ses_id} if ses_id else {}),
+        **({"source": detail["source"], "externalId": detail.get("externalId", "")} if detail.get("source") else {}),
     }))
+    track(pk, detail, message_id, status, bool(result["reply"]))
     db.audit(pk, "plugin:email-automation", "email.drafted", {
         "messageId": message_id, "category": result["category"], "status": status, "sendError": send_error,
         "model": os.environ["BEDROCK_MODEL_ID"],
     })
+
+
+def track(pk: str, detail: dict, message_id: str, status: str, drafted: bool) -> None:
+    """Keep the follow-up pipeline in step with the inbox. Never lets a pipeline fault lose or retry the email."""
+    try:
+        from src.pipeline import deals
+        deal_id = deals.on_email(pk, detail["from"], detail.get("fromName", ""), detail["subject"], message_id)
+        if drafted:
+            events.record(pk, "email_drafted", deal_id, status=status)
+        if status in ("SENT", "SENT_SIMULATED"):  # answered automatically
+            deals.on_outbound(pk, deal_id, "auto_reply")
+    except Exception as exc:  # noqa: BLE001
+        print(json.dumps({"level": "ERROR", "event": "pipeline_track_failed", "error": repr(exc)[:200]}))
 
 
 def handler(event, _context):

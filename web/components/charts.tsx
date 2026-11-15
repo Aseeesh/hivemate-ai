@@ -92,3 +92,50 @@ export function RankBars({ title, rows, unit, onPick }: { title: string; rows: {
     </figure>
   );
 }
+
+/** A percentage as a ring. `null` renders an empty ring with "no data", never a made-up number. */
+export function Ring({ value, label, sub, color = 'var(--fern)', size = 112 }: { value: number | null; label: string; sub?: string; color?: string; size?: number }) {
+  const r = 42, c = 2 * Math.PI * r, v = value == null ? 0 : Math.max(0, Math.min(100, value));
+  return (
+    <figure className="ring" aria-label={`${label}: ${value == null ? 'no data yet' : `${value}%`}`}>
+      <svg viewBox="0 0 100 100" width={size} height={size} role="img" aria-hidden="true">
+        <circle cx="50" cy="50" r={r} fill="none" stroke="var(--track)" strokeWidth="9" />
+        {v > 0 && <circle className="ring-arc" cx="50" cy="50" r={r} fill="none" stroke={color} strokeWidth="9" strokeLinecap="round" strokeDasharray={`${(v / 100) * c} ${c}`} transform="rotate(-90 50 50)" />}
+        <text x="50" y="50" textAnchor="middle" dominantBaseline="central" fontSize={value == null ? 11 : 22} fontWeight="650" fill="var(--ink)">{value == null ? 'no data' : `${value}%`}</text>
+      </svg>
+      <figcaption><strong>{label}</strong>{sub && <span className="muted">{sub}</span>}</figcaption>
+    </figure>
+  );
+}
+
+/** Tiny trend line with a soft area and an emphasised last point. */
+export function Spark({ data, color = 'var(--fern)', width = 120, height = 36 }: { data: number[]; color?: string; width?: number; height?: number }) {
+  if (data.length < 2) return null;
+  const max = Math.max(1, ...data), step = width / (data.length - 1);
+  const pts = data.map((d, i) => [i * step, height - 4 - (d / max) * (height - 8)] as const);
+  const line = pts.map(([x, y], i) => `${i ? 'L' : 'M'}${x.toFixed(1)},${y.toFixed(1)}`).join(' ');
+  const [lx, ly] = pts[pts.length - 1];
+  return (
+    <svg viewBox={`0 0 ${width} ${height}`} width="100%" height={height} preserveAspectRatio="none" aria-hidden="true" style={{ display: 'block', overflow: 'visible' }}>
+      <path d={`${line} L${width},${height} L0,${height} Z`} fill={color} opacity=".14" />
+      <path d={line} fill="none" stroke={color} strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
+      <circle cx={lx} cy={ly} r="3" fill={color} />
+    </svg>
+  );
+}
+
+/** Stages of the enquiry pipeline as bars that narrow, each clickable. Widths are proportional to the largest stage. */
+export function Funnel({ stages, onPick }: { stages: { id: string; label: string; value: number; color: string }[]; onPick?: (id: string) => void }) {
+  const max = Math.max(1, ...stages.map((s) => s.value));
+  return (
+    <div className="funnel" role="list">
+      {stages.map((s, i) => (
+        <button key={s.id} role="listitem" className="funnel-row" onClick={() => onPick?.(s.id)} aria-label={`${s.label}: ${s.value}`}>
+          <span className="funnel-label">{s.label}</span>
+          <span className="funnel-track"><span className="funnel-fill" style={{ width: `${Math.max(s.value ? 6 : 0, (s.value / max) * 100)}%`, background: s.color, animationDelay: `${i * 70}ms` }} /></span>
+          <b>{s.value}</b>
+        </button>
+      ))}
+    </div>
+  );
+}

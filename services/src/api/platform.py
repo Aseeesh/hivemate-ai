@@ -4,7 +4,8 @@ Who: members of the Cognito group `platform-admins` (assigned by an operator wit
 What: tenant list, usage counts, plugin/user/channel status, website origins, document names, daily activity, recent audit actions.
 Never: customer messages, conversation text, lead details, email bodies, plugin config values, site keys or API tokens.
 Every look at one business is written to THAT business's audit trail (`platform.viewed_tenant`) so operator access is visible to it.
-Scale note: counts come from one table scan, fine for a dev/early stage; replace with maintained counters before hundreds of tenants.
+Scale: the console never scans the table on a request. An hourly job (the sweeper) scans once and stores one rollup row per tenant plus an overview row
+(PK=PLATFORM#ROLLUP); the overview and tenant list read those rows, and a single tenant's detail queries only that tenant's partition.
 """
 import json
 import os
@@ -42,6 +43,49 @@ def scan_all() -> tuple[list[dict], bool]:
             break
         kw["ExclusiveStartKey"] = r["LastEvaluatedKey"]
     return [db.clean(i) for i in items], truncated
+
+
+ROLLUP_PK = "PLATFORM#ROLLUP"
+MAX_AGE = 2 * 3600
+
+
+def refresh_rollup(now: float | None = None) -> dict:
+    """One scan, run by the scheduled worker (not by a user request). Writes a row per tenant and removes rows of tenants that no longer exist."""
+    now = int(now or time.time())
+    items, truncated = scan_all()
+    rollup = summarise(items)
+    db.table().put_item(Item=db.to_ddb({"PK": ROLLUP_PK, "SK": "OVERVIEW", **overview(rollup), "daily": daily(items, now=now), "truncated": truncated, "at": now}))
+    for tid, row in rollup.items():
+        db.table().put_item(Item=db.to_ddb({"PK": ROLLUP_PK, "SK": f"T#{tid}", **row, "at": now}))
+    for old in db.query_prefix(ROLLUP_PK, "T#", limit=5000):
+        if old["SK"][2:] not in rollup:
+            db.table().delete_item(Key={"PK": ROLLUP_PK, "SK": old["SK"]})
+    return {"tenants": len(rollup), "truncated": truncated}
+
+
+def load_rollup(now: float | None = None) -> tuple[dict, dict[str, dict]]:
+    """(overview, per-tenant rows). Refreshes inline only if the scheduled job has never run or is stale."""
+    now = now or time.time()
+    ov = db.table().get_item(Key={"PK": ROLLUP_PK, "SK": "OVERVIEW"}).get("Item")
+    if not ov or now - int(ov.get("at", 0)) > MAX_AGE:
+        refresh_rollup(now)
+        ov = db.table().get_item(Key={"PK": ROLLUP_PK, "SK": "OVERVIEW"}).get("Item")
+    rows = {r["SK"][2:]: {k: v for k, v in r.items() if k not in ("PK", "SK", "at")} for r in db.query_prefix(ROLLUP_PK, "T#", limit=5000)}
+    return {k: v for k, v in db.clean(ov).items() if k not in ("PK", "SK")}, rows
+
+
+def tenant_items(tenant_id: str) -> list[dict]:
+    """Only this tenant's partition (a Query, not a Scan)."""
+    from boto3.dynamodb.conditions import Key
+    items, kw = [], {"KeyConditionExpression": Key("PK").eq(f"TENANT#{tenant_id}"), "ProjectionExpression": "PK, SK, #n, createdAt, #r, email, lastAt, updatedAt, #s, channel, #at, #ac, version, allowedOrigins",
+                     "ExpressionAttributeNames": {"#n": "name", "#r": "role", "#s": "status", "#at": "at", "#ac": "action"}}
+    while len(items) < MAX_ITEMS:
+        r = db.table().query(**kw)
+        items += r["Items"]
+        if "LastEvaluatedKey" not in r:
+            break
+        kw["ExclusiveStartKey"] = r["LastEvaluatedKey"]
+    return [db.clean(i) for i in items]
 
 
 def summarise(items: list[dict]) -> dict[str, dict]:
@@ -130,18 +174,18 @@ def handler(event, _context):
     try:
         ctx = from_event(event)
         ctx.require_platform()
-        items, truncated = scan_all()
-        rollup = summarise(items)
         if (method, path) == ("GET", "/platform/overview"):
-            return _resp(200, {**overview(rollup), "daily": daily(items), "truncated": truncated})
+            ov, _ = load_rollup()
+            return _resp(200, ov)
         if (method, path) == ("GET", "/platform/tenants"):
-            rows = sorted(rollup.values(), key=lambda t: t["lastActivity"], reverse=True)
-            return _resp(200, {"tenants": rows, "truncated": truncated})
+            ov, rows = load_rollup()
+            return _resp(200, {"tenants": sorted(rows.values(), key=lambda t: t["lastActivity"], reverse=True), "truncated": ov.get("truncated", False)})
         m = re.fullmatch(r"/platform/tenants/([a-z0-9]+)", path)
         if m and method == "GET":
             if not TENANT_ID.match(m.group(1)):
                 return _resp(400, {"error": "invalid tenant id"})
-            d = detail(m.group(1), items, rollup)
+            items = tenant_items(m.group(1))
+            d = detail(m.group(1), items, summarise(items))
             if not d:
                 return _resp(404, {"error": "not found"})
             db.audit(f"TENANT#{m.group(1)}", f"platform:{ctx.email}", "platform.viewed_tenant", {})

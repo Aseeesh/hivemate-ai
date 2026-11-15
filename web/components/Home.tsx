@@ -1,18 +1,19 @@
 'use client';
 import { useEffect, useState } from 'react';
-import { api, type Conv, type Docs, type Lead, type Message, type Plugin } from '@/lib/api';
-import { CountUp, DayBars, Segments } from '@/components/charts';
+import { api, type Connection, type Conv, type Docs, type Impact, type Lead, type Message, type Plugin, type Task, type Work } from '@/lib/api';
+import { CountUp, DayBars, Funnel, Ring, Spark } from '@/components/charts';
+import { Icon, IconTile } from '@/components/icons';
 
-type Go = (tab: 'Customers' | 'Emails' | 'Business info' | 'Features') => void;
+type Go = (tab: 'Work Queue' | 'Conversations' | 'Knowledge' | 'Settings' | 'Impact' | 'Integrations' | 'Customers' | 'Automations', filter?: string) => void;
 type Gap = { id: string; question: string; at: number };
-type Data = { leads: Lead[]; convs: Conv[]; msgs: Message[]; plugins: Plugin[]; docs: Docs; siteKey: string | null; origins: string[] };
+type Data = { leads: Lead[]; convs: Conv[]; msgs: Message[]; plugins: Plugin[]; docs: Docs; siteKey: string | null; work: Work; impact: Impact; conns: Connection[] };
 
-const WEEK = 7 * 86400;
-const MINUTES_SAVED_PER_CHAT = 3; // a rough, stated assumption: time to answer a routine enquiry by hand
 const DAYS = 14;
 const dayKey = (t: number) => new Date(t * 1000).toISOString().slice(0, 10);
 const lastDays = () => Array.from({ length: DAYS }, (_, i) => dayKey(Date.now() / 1000 - (DAYS - 1 - i) * 86400));
 const ago = (t: number) => { const m = Math.max(1, Math.round((Date.now() / 1000 - t) / 60)); return m < 60 ? `${m} min ago` : m < 1440 ? `${Math.round(m / 60)} h ago` : `${Math.round(m / 1440)} d ago`; };
+const TASK_ICON: Record<string, string> = { follow_up: 'clock', reply_overdue: 'reply', cold_lead: 'snow', invoice_reminder: 'invoice', document_review: 'doc', connection_attention: 'plug' };
+const TONE: Record<string, string> = { urgent: 'var(--bad)', high: 'var(--amber)', normal: 'var(--s1)' };
 
 export default function Home({ go }: { go: Go }) {
   const [d, setD] = useState<Data | null>(null);
@@ -20,68 +21,130 @@ export default function Home({ go }: { go: Go }) {
   const loadGaps = () => api<Gap[]>('GET', '/knowledge/gaps').then(setGaps).catch(() => undefined);
   useEffect(() => { loadGaps(); }, []);
   async function resolve(id: string, how: 'answer' | 'dismiss') {
-    const d = drafts[id]; setBusyGap(id); setNote('');
-    try { await api('POST', `/knowledge/gaps/${id}/${how}`, how === 'answer' ? { question: d?.q ?? gaps.find((g) => g.id === id)?.question, answer: d?.a ?? '' } : {}); await loadGaps(); if (how === 'answer') setNote('Saved. The assistant will know this in about a minute.'); }
+    const x = drafts[id]; setBusyGap(id); setNote('');
+    try { await api('POST', `/knowledge/gaps/${id}/${how}`, how === 'answer' ? { question: x?.q ?? gaps.find((g) => g.id === id)?.question, answer: x?.a ?? '' } : {}); await loadGaps(); if (how === 'answer') setNote('Saved. The assistant will know this in about a minute.'); }
     catch (e) { setNote((e as Error).message); } finally { setBusyGap(''); }
   }
   useEffect(() => {
     Promise.all([
       api<Lead[]>('GET', '/leads'), api<Conv[]>('GET', '/conversations'), api<Message[]>('GET', '/messages'),
       api<Plugin[]>('GET', '/plugins'), api<Docs>('GET', '/documents'),
-      api<{ key: string | null; allowedOrigins: string[] }>('GET', '/channels/web').catch(() => ({ key: null, allowedOrigins: [] as string[] })),
-    ]).then(([leads, convs, msgs, plugins, docs, web]) => setD({ leads, convs, msgs, plugins, docs, siteKey: web.key, origins: web.allowedOrigins }))
+      api<{ key: string | null }>('GET', '/channels/web').catch(() => ({ key: null })),
+      api<Work>('GET', '/work'), api<Impact>('GET', `/impact?days=${DAYS}`), api<Connection[]>('GET', '/connections').catch(() => [] as Connection[]),
+    ]).then(([leads, convs, msgs, plugins, docs, web, work, impact, conns]) => setD({ leads, convs, msgs, plugins, docs, siteKey: web.key, work, impact, conns }))
       .catch((e: Error) => setErr(e.message));
   }, []);
 
   if (err) return <p className="err" role="alert">{err}</p>;
   if (!d) return <p className="muted">Loading…</p>;
 
-  const since = Date.now() / 1000 - WEEK;
-  const week = d.convs.filter((c) => c.lastAt >= since);
-  const newLeads = d.leads.filter((l) => l.status === 'COMPLETE' && l.updatedAt >= since);
+  const s = d.work.summary, m = d.impact.measured;
   const waitingPeople = d.leads.filter((l) => l.status === 'HANDOFF');
-  const waitingDrafts = d.msgs.filter((m) => m.status === 'PENDING_APPROVAL');
+  const waitingDrafts = d.msgs.filter((x) => x.status === 'PENDING_APPROVAL');
   const installed = (id: string) => d.plugins.some((p) => p.pluginId === id && p.installed);
   const steps = [
-    { done: d.docs.documents.length > 0, title: 'Tell the assistant about your business', text: 'Upload your prices, services, areas and opening hours. It only answers from these.', tab: 'Business info' as const },
-    { done: installed('conversation-agent'), title: 'Turn on the customer assistant', text: 'Switch on the assistant that answers customers and captures their details.', tab: 'Features' as const },
-    { done: !!d.siteKey, title: 'Put the chat on your website', text: 'Copy one line of code into your site. Customers can then chat with you any time.', tab: 'Customers' as const },
-    { done: installed('email-automation'), title: 'Let it draft email replies (optional)', text: 'Replies it is unsure about wait for your approval. Nothing is sent without your say-so.', tab: 'Features' as const },
+    { done: d.docs.documents.length > 0, title: 'Tell the assistant about your business', tab: 'Knowledge' as const },
+    { done: installed('conversation-agent'), title: 'Turn on the customer assistant', tab: 'Automations' as const },
+    { done: !!d.siteKey, title: 'Put the chat on your website', tab: 'Conversations' as const },
+    { done: installed('email-automation'), title: 'Let it draft email replies', tab: 'Automations' as const },
+    { done: d.conns.some((c) => c.connected), title: 'Connect Outlook or Xero', tab: 'Integrations' as const },
   ];
-  const todo = steps.filter((s) => !s.done);
-  const needs = waitingPeople.length + waitingDrafts.length;
+  const doneSteps = steps.filter((x) => x.done).length;
   const days = lastDays();
-  const recent = [...d.leads].sort((a, b) => b.updatedAt - a.updatedAt).slice(0, 6);
+  const trend = d.impact.daily.slice(-DAYS).map((x) => x.tasks);
+  const chatsTrend = days.map((k) => d.convs.filter((c) => dayKey(c.createdAt ?? c.lastAt) === k).length);
+  const topTasks: Task[] = d.work.tasks.slice(0, 5);
+  const p = d.impact.pipeline;
+  const systems = [
+    ...d.conns.map((c) => ({ name: c.label, state: c.status === 'connected' ? 'ok' : c.connected ? 'bad' : 'off', text: c.status === 'connected' ? `Connected · ${c.account}` : c.connected ? 'Needs reconnecting' : 'Not connected' })),
+    { name: 'Website chat', state: d.siteKey ? 'ok' : 'off', text: d.siteKey ? 'Live on your site' : 'Not added yet' },
+    { name: 'Email drafting', state: installed('email-automation') ? 'ok' : 'off', text: installed('email-automation') ? 'On' : 'Off' },
+  ];
+  const stateColor = (x: string) => (x === 'ok' ? 'var(--fern)' : x === 'bad' ? 'var(--bad)' : 'var(--line)');
 
   return (
-    <div className="stack">
-      <section className="card stack">
-        <h2>What Hivemate does for your business</h2>
-        <p>It answers your customers&apos; questions at any hour using your own prices and hours, collects the details of anyone who wants a job done, and tells you about it. It never makes up a price, and anything sensitive goes to you.</p>
+    <div className="stack" style={{ gap: 18 }}>
+      <section className="kpis" aria-label="Today">
+        <button className="card kpi2" onClick={() => go('Work Queue')}>
+          <div className="top"><IconTile name="queue" tone="fern" /><div style={{ width: 110 }}><Spark data={trend} /></div></div>
+          <div className="num"><CountUp value={s.open} /></div><div className="lbl">Things to do</div>
+          <div className="hint">{s.urgent} urgent <Icon name="arrow" size={13} /></div>
+        </button>
+        <button className="card kpi2" onClick={() => go('Work Queue', 'reply_overdue')}>
+          <div className="top"><IconTile name="reply" tone={s.byType.reply_overdue ? 'bad' : 'muted'} /></div>
+          <div className="num"><CountUp value={s.byType.reply_overdue ?? 0} /></div><div className="lbl">Customers waiting for a reply</div>
+          <div className="hint">Nobody has answered yet <Icon name="arrow" size={13} /></div>
+        </button>
+        <button className="card kpi2" onClick={() => go('Work Queue', 'follow_up')}>
+          <div className="top"><IconTile name="clock" tone="amber" /></div>
+          <div className="num"><CountUp value={s.byType.follow_up ?? 0} /></div><div className="lbl">Follow-ups ready to send</div>
+          <div className="hint">{s.needsApproval} waiting for approval <Icon name="arrow" size={13} /></div>
+        </button>
+        <button className="card kpi2" onClick={() => go('Impact')}>
+          <div className="top"><IconTile name="spark" tone="s1" /><div style={{ width: 110 }}><Spark data={chatsTrend} color="var(--s1)" /></div></div>
+          <div className="num"><CountUp value={d.impact.estimated.hoursSaved} decimals={1} /><span style={{ fontSize: 16, fontWeight: 500 }}> h</span></div><div className="lbl">Time saved, last {DAYS} days</div>
+          <div className="hint">Estimate · see how <Icon name="arrow" size={13} /></div>
+        </button>
       </section>
 
-      {needs > 0 && (
-        <section className="card stack" aria-label="Needs you">
-          <h3>Needs you ({needs})</h3>
-          {waitingPeople.map((l) => (
-            <div key={l.SK} className="row" style={{ justifyContent: 'space-between' }}>
-              <span><strong>{l.collected.name || 'A customer'}</strong> needs a person: {l.handoffReason || 'asked for a human'} <span className="muted">· {ago(l.updatedAt)}</span></span>
-              <button className="btn primary" onClick={() => go('Customers')}>Open</button>
-            </div>
-          ))}
-          {waitingDrafts.map((m) => (
-            <div key={m.SK} className="row" style={{ justifyContent: 'space-between' }}>
-              <span>Email from <strong>{m.from}</strong> is waiting for your approval: {m.subject || '(no subject)'}</span>
-              <button className="btn primary" onClick={() => go('Emails')}>Review</button>
-            </div>
-          ))}
-        </section>
-      )}
+      <section className="two">
+        <div className="card stack" aria-label="Needs your attention">
+          <div className="row" style={{ justifyContent: 'space-between' }}><h2>Needs your attention</h2><button className="btn" onClick={() => go('Work Queue')}>Open Work Queue</button></div>
+          <div className="attn">
+            {waitingPeople.map((l) => (
+              <div key={l.SK} className="attn-row" style={{ ['--c' as string]: 'var(--bad)' }}><IconTile name="users" tone="bad" size={34} />
+                <div className="txt"><strong>{l.collected.name || 'A customer'} asked for a person</strong><span>{l.handoffReason || 'Requested a human'} · {ago(l.updatedAt)}</span></div>
+                <button className="btn primary" onClick={() => go('Conversations')}>Open</button></div>
+            ))}
+            {topTasks.map((t) => (
+              <div key={t.taskId} className="attn-row" style={{ ['--c' as string]: TONE[t.priority] }}><IconTile name={TASK_ICON[t.type] ?? 'queue'} tone={t.priority === 'urgent' ? 'bad' : t.priority === 'high' ? 'amber' : 's1'} size={34} />
+                <div className="txt"><strong>{t.title}</strong><span>{t.detail}</span></div>
+                <button className="btn" onClick={() => go('Work Queue', t.type)}>Review</button></div>
+            ))}
+            {waitingDrafts.slice(0, 3).map((x) => (
+              <div key={x.SK} className="attn-row" style={{ ['--c' as string]: 'var(--amber)' }}><IconTile name="mail" tone="amber" size={34} />
+                <div className="txt"><strong>Reply drafted for {x.from}</strong><span>{x.subject || '(no subject)'} · waiting for your approval</span></div>
+                <button className="btn" onClick={() => go('Conversations', 'Email drafts')}>Review</button></div>
+            ))}
+            {!waitingPeople.length && !topTasks.length && !waitingDrafts.length && <div className="row" style={{ padding: '18px 4px' }}><IconTile name="check" tone="fern" /><span><strong>All clear.</strong><br /><span className="muted">New follow-ups appear here when a customer goes quiet.</span></span></div>}
+          </div>
+        </div>
+        <div className="card stack" aria-label="How you are doing">
+          <h2>How you are doing</h2>
+          <div className="rings three">
+            <Ring value={m.respondedWithinHourPct} label="Answered within an hour" color="var(--fern)" size={92} />
+            <Ring value={m.followUpRatePct} label="Quiet enquiries followed up" sub={`${m.followUpsActioned ?? 0} of ${m.followUpsDue ?? 0}`} color="var(--s1)" size={92} />
+            <Ring value={m.executionSuccessPct} label="Sends that succeeded" color="var(--s3)" size={92} />
+          </div>
+          <button className="btn" onClick={() => go('Impact')}>See business impact</button>
+        </div>
+      </section>
+
+      <section className="two">
+        <div className="card stack" aria-label="Enquiry pipeline">
+          <div className="row" style={{ justifyContent: 'space-between' }}><h2>Where your enquiries are</h2><button className="btn" onClick={() => go('Customers')}>Open the board</button></div>
+          <Funnel onPick={() => go('Customers')} stages={[
+            { id: 'new', label: 'New', value: p.new ?? 0, color: 'var(--s1)' }, { id: 'responded', label: 'Replied', value: p.responded ?? 0, color: 'var(--s3)' },
+            { id: 'followed_up', label: 'Followed up', value: p.followed_up ?? 0, color: 'var(--s4)' }, { id: 'quote_sent', label: 'Quote sent', value: p.quote_sent ?? 0, color: 'var(--amber)' },
+            { id: 'won', label: 'Won', value: p.won ?? 0, color: 'var(--fern)' }, { id: 'cold', label: 'Cold or lost', value: (p.cold ?? 0) + (p.lost ?? 0), color: 'var(--muted)' }]} />
+          <span className="muted">{m.leadsRecovered ?? 0} recovered after a follow-up · {m.enquiries ?? 0} new in the last {DAYS} days</span>
+        </div>
+        <div className="card stack" aria-label="Connected systems">
+          <div className="row" style={{ justifyContent: 'space-between' }}><h2>Connected systems</h2><button className="btn" onClick={() => go('Integrations')}>Manage</button></div>
+          <div>{systems.map((x) => (
+            <div key={x.name} className="sys"><i className="dot" style={{ ['--c' as string]: stateColor(x.state) }} /><span style={{ flex: 1 }}><strong>{x.name}</strong><br /><span className="muted" style={{ fontSize: 13 }}>{x.text}</span></span></div>
+          ))}</div>
+        </div>
+      </section>
+
+      <section className="grid" aria-label="Activity" style={{ gridTemplateColumns: 'repeat(auto-fit,minmax(340px,1fr))' }}>
+        <DayBars title="Customer chats per day" unit="chats" data={days.map((k, i) => ({ day: k, v: chatsTrend[i] }))} />
+        <DayBars title="Leads captured per day" unit="leads" color="var(--s3)" data={days.map((k) => ({ day: k, v: d.leads.filter((l) => l.status === 'COMPLETE' && dayKey(l.updatedAt) === k).length }))} />
+      </section>
 
       {(gaps.length > 0 || note) && (
         <section className="card stack" aria-label="Questions to answer">
-          <h3>Questions customers asked that the assistant could not answer ({gaps.length})</h3>
-          <p className="muted" style={{ margin: 0 }}>Write the answer once and the assistant will use it from now on. It is added to your public knowledge, so only write what customers may be told.</p>
+          <div className="row"><IconTile name="book" tone="s4" /><div><h2>Questions the assistant could not answer ({gaps.length})</h2><span className="muted">Write the answer once and it is used from then on. It joins your public knowledge, so only write what customers may be told.</span></div></div>
           {note && <p className="ok" role="status">{note}</p>}
           {gaps.slice(0, 5).map((g) => (
             <div key={g.id} className="stack" style={{ borderTop: '1px solid var(--line)', paddingTop: 10 }}>
@@ -94,79 +157,16 @@ export default function Home({ go }: { go: Go }) {
         </section>
       )}
 
-      <section aria-label="This week" className="grid" style={{ gridTemplateColumns: 'repeat(auto-fit,minmax(190px,1fr))' }}>
-        <Stat n={week.length} label="Customer chats this week" />
-        <Stat n={newLeads.length} label="New leads this week" hint="Name and phone captured" />
-        <Stat n={waitingPeople.length} label="Waiting for a person" />
-        <Stat n={Math.round((week.length * MINUTES_SAVED_PER_CHAT) / 60 * 10) / 10} label="Hours of replies handled" hint={`Estimate: ${MINUTES_SAVED_PER_CHAT} min per chat`} />
-      </section>
-
-      <section className="grid" aria-label="Activity" style={{ gridTemplateColumns: 'repeat(auto-fit,minmax(340px,1fr))' }}>
-        <DayBars title="Customer chats per day" unit="chats" data={days.map((k) => ({ day: k, v: d.convs.filter((c) => dayKey(c.createdAt ?? c.lastAt) === k).length }))} />
-        <DayBars title="Leads captured per day" unit="leads" color="var(--s3)" data={days.map((k) => ({ day: k, v: d.leads.filter((l) => l.status === 'COMPLETE' && dayKey(l.updatedAt) === k).length }))} />
-      </section>
-      <Segments title="What happened to your enquiries" empty="No enquiries yet. Once customers chat, you will see how they ended up."
-        parts={[
-          { label: 'Lead captured', value: d.leads.filter((l) => l.status === 'COMPLETE').length, color: 'var(--s3)' },
-          { label: 'Answered, still gathering details', value: d.leads.filter((l) => l.status === 'COLLECTING').length, color: 'var(--s1)' },
-          { label: 'Needs a person', value: waitingPeople.length, color: 'var(--s2)' },
-        ]} />
-
-      <section className="grid" aria-label="Your business">
-        <div className="card stack">
-          <h3>Your website</h3>
-          {d.siteKey ? <>
-            <p className="muted" style={{ margin: 0 }}>The chat is live for:</p>
-            {d.origins.length ? d.origins.map((o) => <div key={o} className="mono">{o}</div>) : <div className="muted">Any website (not restricted yet)</div>}
-          </> : <p className="muted" style={{ margin: 0 }}>The chat is not on a website yet.</p>}
-          <button className="btn" onClick={() => go('Customers')}>{d.siteKey ? 'Manage website chat' : 'Add chat to your website'}</button>
-        </div>
-        <div className="card stack">
-          <h3>What the assistant knows</h3>
-          {d.docs.documents.length ? <>
-            {d.docs.documents.slice(0, 5).map((f) => <div key={f.name} className="row" style={{ justifyContent: 'space-between' }}><span className="mono">{f.name}</span><span className="muted">{Math.max(1, Math.round(f.size / 1024))} KB</span></div>)}
-            {d.docs.documents.length > 5 && <span className="muted">+ {d.docs.documents.length - 5} more</span>}
-            <span className="muted">{d.docs.lastSync ? `Last learned: ${d.docs.lastSync.status.toLowerCase()}` : 'Not learned yet: press Sync in Business info'}</span>
-          </> : <p className="muted" style={{ margin: 0 }}>No documents yet. Upload your prices, services and hours.</p>}
-          <button className="btn" onClick={() => go('Business info')}>Manage</button>
-        </div>
-        <div className="card stack">
-          <h3>Switched on</h3>
-          {d.plugins.filter((p) => p.installed).map((p) => <div key={p.pluginId}>✓ {p.name}</div>)}
-          {!d.plugins.some((p) => p.installed) && <p className="muted" style={{ margin: 0 }}>Nothing yet.</p>}
-          <button className="btn" onClick={() => go('Features')}>Manage</button>
-        </div>
-      </section>
-
-      <section className="card stack" aria-label="Recent enquiries">
-        <div className="row" style={{ justifyContent: 'space-between' }}><h3>Recent enquiries</h3><button className="btn" onClick={() => go('Customers')}>See all and read the chats</button></div>
-        {!recent.length && <p className="muted">No enquiries yet.</p>}
-        {recent.map((l) => (
-          <div key={l.SK} className="row" style={{ justifyContent: 'space-between', borderTop: '1px solid var(--line)', paddingTop: 8 }}>
-            <span><strong>{l.collected.name || 'Unknown customer'}</strong>{l.collected.need ? ` · ${l.collected.need}` : ''}
-              <br /><span className="muted">{[l.collected.location, l.collected.timing, l.collected.phone].filter(Boolean).join(' · ') || 'No details yet'}</span></span>
-            <span className="row"><span className="tag">{l.channel}</span><span className={`tag ${l.status === 'COMPLETE' ? 'ok' : l.status === 'HANDOFF' ? 'hold' : ''}`}>{l.status === 'HANDOFF' && <i className="pulse" />}{l.status === 'COMPLETE' ? 'lead' : l.status === 'HANDOFF' ? 'needs you' : 'chatting'}</span><span className="muted">{ago(l.updatedAt)}</span></span>
-          </div>
-        ))}
-      </section>
-
-      {todo.length > 0 && (
+      {doneSteps < steps.length && (
         <section className="card stack" aria-label="Get set up">
-          <h3>Get set up ({steps.length - todo.length} of {steps.length} done)</h3>
-          {steps.map((s) => (
-            <div key={s.title} className="row" style={{ justifyContent: 'space-between', opacity: s.done ? 0.55 : 1 }}>
-              <span><strong>{s.done ? '✓ ' : ''}{s.title}</strong><br /><span className="muted">{s.text}</span></span>
-              {!s.done && <button className="btn" onClick={() => go(s.tab)}>Do this</button>}
-            </div>
-          ))}
+          <div className="row" style={{ justifyContent: 'space-between' }}><h2>Get set up</h2><span className="muted">{doneSteps} of {steps.length} done</span></div>
+          <div className="progress"><i style={{ width: `${(doneSteps / steps.length) * 100}%` }} /></div>
+          <div className="steps">{steps.map((x, i) => (
+            <div key={x.title} className={`step ${x.done ? 'done' : ''}`}><span className="n">{x.done ? <Icon name="check" size={14} /> : i + 1}</span><span style={{ flex: 1 }}>{x.title}</span>
+              {!x.done && <button className="btn" onClick={() => go(x.tab)}>Do this</button>}</div>
+          ))}</div>
         </section>
       )}
-
-      {!needs && !todo.length && <p className="muted">Nothing needs you right now.</p>}
     </div>
   );
-}
-
-function Stat({ n, label, hint }: { n: number; label: string; hint?: string }) {
-  return <div className="card"><div className="hero-num"><CountUp value={n} decimals={n % 1 ? 1 : 0} /></div><div>{label}</div>{hint && <div className="muted" style={{ fontSize: 13 }}>{hint}</div>}</div>;
 }

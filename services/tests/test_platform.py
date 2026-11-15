@@ -29,7 +29,7 @@ def test_group_claim_forms():
 
 
 def test_business_admin_is_refused_on_every_platform_route(monkeypatch):
-    monkeypatch.setattr(platform, "scan_all", lambda: (_ for _ in ()).throw(AssertionError("must not read the table")))
+    monkeypatch.setattr(platform.db, "table", lambda: (_ for _ in ()).throw(AssertionError("must not read the table")))
     for path in ("/platform/overview", "/platform/tenants", "/platform/tenants/abc123"):
         assert platform.handler(event(path), None)["statusCode"] == 403          # admin of a business
         assert platform.handler(event(path, groups="[something-else]"), None)["statusCode"] == 403
@@ -77,8 +77,7 @@ def test_detail_exposes_no_customer_content_or_secrets(monkeypatch):
     assert platform.detail("zzz", items, platform.summarise(items)) is None
 
 
-def test_tenant_id_in_path_is_validated(monkeypatch):
-    monkeypatch.setattr(platform, "scan_all", lambda: ([], False))
+def test_tenant_id_in_path_is_validated(fake):
     ev = lambda p: platform.handler(event(p, groups="[platform-admins]"), None)["statusCode"]  # noqa: E731
     assert ev("/platform/tenants/ab") == 400        # route matches, id too short
     assert ev("/platform/tenants/AB!x") == 404      # not a valid id shape: no route
@@ -99,3 +98,24 @@ def test_daily_series_has_no_gaps_and_scopes_to_a_tenant():
     assert len(all_) == 3 and [d["conversations"] for d in all_] == [0, 1, 2]
     mine = platform.daily(items, "aaaaaa", days=3, now=now)
     assert [d["conversations"] for d in mine] == [0, 1, 1] and mine[-1]["leads"] == 1
+
+
+def test_console_reads_a_stored_rollup_and_one_tenant_partition_never_a_scan(fake, monkeypatch):
+    monkeypatch.setattr(platform, "s3", type("S", (), {"list_objects_v2": lambda self, **k: {"Contents": []}})())
+    monkeypatch.setenv("DOCS_BUCKET", "b")
+    for it in ITEMS:
+        it = {**it, "PK": it["PK"].replace("#a1", "#a1abcdef").replace("#b2", "#b2abcdef")}
+        fake.items[(it["PK"], it["SK"])] = it
+    scans = []
+    real = platform.scan_all
+    monkeypatch.setattr(platform, "scan_all", lambda: scans.append(1) or real())
+    fake.scan = lambda **kw: {"Items": [dict(i) for i in fake.items.values()]}
+    out = platform.refresh_rollup()
+    assert out["tenants"] == 2 and len(scans) == 1
+    ov = platform.handler(event("/platform/overview", "[platform-admins]"), None)
+    assert ov["statusCode"] == 200 and json.loads(ov["body"])["tenants"] == 2
+    tl = json.loads(platform.handler(event("/platform/tenants", "[platform-admins]"), None)["body"])
+    assert {t["tenantId"] for t in tl["tenants"]} == {"a1abcdef", "b2abcdef"}
+    d = platform.handler(event("/platform/tenants/a1abcdef", "[platform-admins]"), None)
+    assert d["statusCode"] == 200 and json.loads(d["body"])["name"] == "SparkClean"
+    assert len(scans) == 1  # three console requests, zero additional scans
