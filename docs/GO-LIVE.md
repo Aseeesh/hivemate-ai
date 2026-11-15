@@ -1,9 +1,15 @@
 # Go-live checklist: what only you can do
 
 The code for Hivemate 2.0 is built and tested against fakes. These steps need your accounts, a real device or a third party, so they cannot be done from the repo.
-Nothing below has been run for you. Tick each one only after you have seen it work.
+**Deployed to `hivemate-dev` on 2026-11-15** (backend and dashboard). Verified live that day:
+- `tests/e2e/v2_e2e.py`: 31/31 (packs, policy safety rules, chat and email becoming deals, unified inbox, approve-and-send, impact from events, Ask, Customer 360, connections, cross-tenant isolation).
+- `tests/e2e/agent_e2e.py`: 37/38. The one miss is a strict string check on the model's wording (it answered the opening time without repeating the closing time), not a functional failure.
+- Public endpoints: bad webhook signature 401, Microsoft validation handshake echoes the token, forged OAuth state is refused, every new route returns 401 without a token. The scheduled worker ran cleanly.
 
-## 1. Deploy
+Still NOT verified, and only you can do it: everything in sections 2 to 4 below.
+
+## 1. Deploy (done for dev; repeat after changes)
+Use the `hivemate` AWS profile. If your shell has `AWS_ACCESS_KEY_ID` set for another project, unset it first or CDK deploys as the wrong user.
 ```bash
 cd infra && npx cdk deploy --all -c stage=dev -c alertEmail=<you> -c senderEmail=<verified address>
 cd ../web && npm run build && cd .. && ./scripts/deploy-web.sh   # existing script

@@ -83,7 +83,10 @@ class FakeTable:
         for e in self._leaves(KeyConditionExpression):
             name, op = e["values"][0].name, e["operator"]
             val = e["values"][1] if len(e["values"]) > 1 else None
-            checks.append((name, op, val))
+            checks.append((name, op, e["values"][1:] if op == "BETWEEN" else val))
+        keys = [c[0] for c in checks]
+        if len(keys) != len(set(keys)):  # the real service rejects this; the fake must too
+            raise ClientError({"Error": {"Code": "ValidationException", "Message": "KeyConditionExpressions must only contain one condition per key"}}, "Query")
         rows = []
         for it in self.items.values():
             ok = True
@@ -101,6 +104,8 @@ class FakeTable:
                     ok &= str(cur) >= val
                 elif op == "<":
                     ok &= str(cur) < val
+                elif op == "BETWEEN":
+                    ok &= val[0] <= str(cur) <= val[1]
                 else:
                     raise AssertionError(op)
             if ok:

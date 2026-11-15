@@ -8,7 +8,8 @@ Both projects were tested from a clean state: Hivemate on the deployed ap-southe
 | Unit tests (pytest) | 30 passed |
 | Infra type-check, `cdk synth`, web type-check | clean |
 | `tests/e2e/e2e.py` (core platform, 51 checks) | 51/51 |
-| `tests/e2e/agent_e2e.py` (conversation agent) | 38/38 |
+| `tests/e2e/agent_e2e.py` (conversation agent) | 38/38 (37/38 on 2026-11-15 after the 2.0 deploy: one strict wording check) |
+| `tests/e2e/v2_e2e.py` (Hivemate 2.0 routes, live) | 31/31 on 2026-11-15 |
 | `tests/e2e/public_chat_e2e.py` (public website chat) | 25/25 |
 | Agent evaluation (`tests/eval`, 22 cases x 3) | 94% of runs (Nova Pro); see docs/EVAL.md |
 | DLQ alarm after the run | OK, queue empty |
