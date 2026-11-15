@@ -1,6 +1,10 @@
 'use client';
 import { useCallback, useEffect, useState } from 'react';
 import { api, type Task, type Work } from '@/lib/api';
+import { IconTile } from '@/components/icons';
+
+const TICON: Record<string, string> = { follow_up: 'clock', reply_overdue: 'reply', cold_lead: 'snow', invoice_reminder: 'invoice', document_review: 'doc', connection_attention: 'plug', handoff: 'users' };
+const STRIPE: Record<string, string> = { urgent: 'var(--bad)', high: 'var(--amber)', normal: 'var(--s1)' };
 
 const TYPE_LABEL: Record<string, string> = { follow_up: 'Follow-up', reply_overdue: 'Reply overdue', cold_lead: 'Gone cold', invoice_reminder: 'Invoice reminder', document_review: 'Document review', connection_attention: 'Connection', handoff: 'Needs a person' };
 const WHY: Record<string, string> = {
@@ -36,8 +40,8 @@ export default function WorkQueue({ isAdmin, initialType = '', go }: { isAdmin: 
   return (
     <div className="stack">
       <section className="grid" aria-label="Queue summary" style={{ gridTemplateColumns: 'repeat(auto-fit,minmax(170px,1fr))' }}>
-        {[{ n: s?.open ?? 0, l: 'Open', f: '' }, { n: s?.urgent ?? 0, l: 'Urgent', f: '' }, { n: s?.needsApproval ?? 0, l: 'Waiting for your approval', f: '' }, { n: s?.failed ?? 0, l: 'Failed, can be retried', f: '' }].map((k) => (
-          <div key={k.l} className="card"><div className="hero-num">{k.n}</div><div>{k.l}</div></div>
+        {([{ n: s?.open ?? 0, l: 'Open', i: 'queue', t: 'fern' }, { n: s?.urgent ?? 0, l: 'Urgent', i: 'alert', t: 'bad' }, { n: s?.needsApproval ?? 0, l: 'Waiting for your approval', i: 'check', t: 'amber' }, { n: s?.failed ?? 0, l: 'Failed, can be retried', i: 'reply', t: 'muted' }] as const).map((k) => (
+          <div key={k.l} className="card row" style={{ gap: 14 }}><IconTile name={k.i} tone={k.n ? k.t : 'muted'} size={44} /><div><div className="hero-num">{k.n}</div><div>{k.l}</div></div></div>
         ))}
       </section>
       <section className="card row" aria-label="Filters" style={{ justifyContent: 'space-between' }}>
@@ -56,9 +60,9 @@ export default function WorkQueue({ isAdmin, initialType = '', go }: { isAdmin: 
       {work?.tasks.map((t) => {
         const canSend = (t.type === 'follow_up' || t.type === 'invoice_reminder') && !!t.draft; const text = drafts[t.taskId] ?? t.draft;
         return (
-          <article key={t.taskId} className="card stack">
+          <article key={t.taskId} className="card stack task" style={{ ['--c' as string]: t.status === 'done' ? 'var(--fern)' : STRIPE[t.priority] }}>
             <div className="row" style={{ justifyContent: 'space-between' }}>
-              <h3>{t.title}</h3>
+              <span className="row" style={{ gap: 12 }}><IconTile name={TICON[t.type] ?? 'queue'} tone={t.priority === 'urgent' ? 'bad' : t.priority === 'high' ? 'amber' : 's1'} size={36} /><h3>{t.title}</h3></span>
               <div className="row"><span className={`tag ${tone(t.priority)}`}>{t.priority}</span><span className="tag">{TYPE_LABEL[t.type] ?? t.type}</span>{t.channel && <span className="tag">{t.channel}</span>}<span className={`tag ${t.status === 'done' ? 'ok' : t.status === 'failed' ? 'bad' : t.status === 'needs_approval' ? 'hold' : ''}`}>{t.status.replace('_', ' ')}</span></div>
             </div>
             <span className="muted">{t.detail} · {ago(t.createdAt)}{t.assignee ? ` · assigned to ${t.assignee}` : ''}</span>

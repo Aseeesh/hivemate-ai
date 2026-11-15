@@ -1,7 +1,8 @@
 'use client';
 import { useEffect, useState } from 'react';
 import { api, type Impact as ImpactT } from '@/lib/api';
-import { CountUp, DayBars, Segments } from '@/components/charts';
+import { CountUp, DayBars, Funnel, Ring } from '@/components/charts';
+import { IconTile } from '@/components/icons';
 
 const dur = (s: number | null) => (s == null ? 'no data yet' : s < 3600 ? `${Math.max(1, Math.round(s / 60))} min` : `${(s / 3600).toFixed(1)} h`);
 const pct = (v: number | null) => (v == null ? 'no data yet' : `${v}%`);
@@ -18,16 +19,18 @@ export default function Impact({ go }: { go: (t: 'Automations' | 'Work Queue') =
         <p className="muted" style={{ margin: 0 }}>Every figure below is counted from what actually happened in your account.</p>
         <label className="row">Period <select value={days} onChange={(e) => setDays(Number(e.target.value))}>{[7, 30, 90].map((x) => <option key={x} value={x}>Last {x} days</option>)}</select></label>
       </div>
-      <h2>Measured results</h2>
-      <section className="grid" style={{ gridTemplateColumns: 'repeat(auto-fit,minmax(200px,1fr))' }}>
-        <div className="card"><div className="hero-num"><CountUp value={n('enquiries')} /></div><div>Enquiries received</div></div>
-        <div className="card"><div className="hero-num">{dur(m.medianResponseSeconds)}</div><div>Typical time to first reply</div><div className="muted">{pct(m.respondedWithinHourPct)} answered within an hour</div></div>
-        <div className="card"><div className="hero-num">{pct(m.followUpRatePct)}</div><div>Quiet enquiries followed up</div><div className="muted">{n('followUpsActioned')} of {n('followUpsDue')} due</div></div>
-        <div className="card"><div className="hero-num"><CountUp value={n('leadsRecovered')} /></div><div>Leads recovered</div><div className="muted">{n('leadsWentCold')} went cold · recovery {pct(m.recoveryRatePct)}</div></div>
-        <div className="card"><div className="hero-num">{pct(m.executionSuccessPct)}</div><div>Sends that succeeded</div><div className="muted">{n('executionsFailed')} failed</div></div>
-        <div className="card"><div className="hero-num"><CountUp value={n('manualInterventions')} /></div><div>Times a person stepped in</div><div className="muted">{n('approvalsCompleted')} approvals</div></div>
-        <div className="card"><div className="hero-num"><CountUp value={n('invoiceRemindersSent')} /></div><div>Invoice reminders sent</div><div className="muted">{n('invoicesPaidAfterReminder')} paid afterwards</div></div>
-        <button className="card kpi" onClick={() => go('Work Queue')}><div className="hero-num"><CountUp value={n('repliesOverdue')} /></div><div>Replies that were overdue</div><div className="muted">Open the Work Queue</div></button>
+      <section className="card stack"><h2>Measured results</h2>
+        <div className="rings">
+          <Ring value={m.respondedWithinHourPct} label="Answered within an hour" sub={`typical first reply ${dur(m.medianResponseSeconds)}`} size={132} />
+          <Ring value={m.followUpRatePct} label="Quiet enquiries followed up" sub={`${n('followUpsActioned')} of ${n('followUpsDue')} due`} color="var(--s1)" size={132} />
+          <Ring value={m.recoveryRatePct} label="Quiet leads recovered" sub={`${n('leadsRecovered')} back, ${n('leadsWentCold')} went cold`} color="var(--s4)" size={132} />
+          <Ring value={m.executionSuccessPct} label="Sends that succeeded" sub={`${n('executionsFailed')} failed`} color="var(--s3)" size={132} />
+        </div></section>
+      <section className="kpis">
+        {([['mail', 's1', n('enquiries'), 'Enquiries received', ''], ['trophy', 'fern', n('leadsRecovered'), 'Leads recovered', 'replied after a follow-up'], ['users', 'amber', n('manualInterventions'), 'Times a person stepped in', `${n('approvalsCompleted')} approvals`], ['invoice', 's4', n('invoiceRemindersSent'), 'Invoice reminders sent', `${n('invoicesPaidAfterReminder')} paid afterwards`]] as const).map(([i, t, v, l, h]) => (
+          <div key={l} className="card kpi2" style={{ cursor: 'default' }}><div className="top"><IconTile name={i} tone={t} /></div><div className="num"><CountUp value={v} /></div><div className="lbl">{l}</div><div className="hint">{h}</div></div>
+        ))}
+        <button className="card kpi2" onClick={() => go('Work Queue')}><div className="top"><IconTile name="reply" tone="bad" /></div><div className="num"><CountUp value={n('repliesOverdue')} /></div><div className="lbl">Replies that were overdue</div><div className="hint">Open the Work Queue</div></button>
       </section>
       <section className="card stack">
         <h2>Estimated time saved</h2>
@@ -36,9 +39,9 @@ export default function Impact({ go }: { go: (t: 'Automations' | 'Work Queue') =
         {d.estimated.basis.length ? <table><thead><tr><th>Task</th><th>Prepared</th><th>Minutes each</th><th>Minutes</th></tr></thead><tbody>{d.estimated.basis.map((b) => <tr key={b.type}><td>{b.type.replace(/_/g, ' ')}</td><td>{b.count}</td><td>{b.minutesEach}</td><td>{b.minutes}</td></tr>)}</tbody></table> : <p className="muted">No automated tasks yet.</p>}
       </section>
       <DayBars title="Tasks prepared or sent per day" unit="tasks" data={d.daily.map((x) => ({ day: x.day, v: x.tasks }))} />
-      <Segments title="Where your enquiries are now" empty="No enquiries tracked yet." parts={[
-        { label: 'New', value: d.pipeline.new ?? 0, color: 'var(--s1)' }, { label: 'Replied', value: (d.pipeline.responded ?? 0) + (d.pipeline.followed_up ?? 0), color: 'var(--s3)' },
-        { label: 'Quote sent', value: d.pipeline.quote_sent ?? 0, color: 'var(--s4)' }, { label: 'Won', value: d.pipeline.won ?? 0, color: 'var(--fern)' }, { label: 'Went cold or lost', value: (d.pipeline.cold ?? 0) + (d.pipeline.lost ?? 0), color: 'var(--s2)' }]} />
+      <section className="card stack"><h2>Where your enquiries are now</h2>
+        <Funnel stages={[{ id: 'new', label: 'New', value: d.pipeline.new ?? 0, color: 'var(--s1)' }, { id: 'r', label: 'Replied', value: (d.pipeline.responded ?? 0) + (d.pipeline.followed_up ?? 0), color: 'var(--s3)' },
+          { id: 'q', label: 'Quote sent', value: d.pipeline.quote_sent ?? 0, color: 'var(--amber)' }, { id: 'w', label: 'Won', value: d.pipeline.won ?? 0, color: 'var(--fern)' }, { id: 'c', label: 'Cold or lost', value: (d.pipeline.cold ?? 0) + (d.pipeline.lost ?? 0), color: 'var(--muted)' }]} /></section>
       <p className="muted">Not measured: cost per task. Per-task cloud and third-party cost is not metered yet, so Hivemate does not show a made-up figure. These are workload and speed numbers, not a financial result.</p>
     </div>
   );
