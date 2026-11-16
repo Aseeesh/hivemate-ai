@@ -8,7 +8,8 @@ The code for Hivemate 2.0 is built and tested against fakes. These steps need yo
 
 **Update 2026-11-16:** PR #1 merged to `main`; backend and dashboard redeployed from `main`. Re-verified live after that deploy:
 - `tests/e2e/v2_e2e.py` 31/31 again, and `tests/e2e/public_chat_e2e.py` 25/25 (public chat, including the per-visitor and per-business rate limits).
-- The scheduled worker ran 67 times in 24 hours with no errors. It created no follow-ups, because no real enquiry has arrived since the deploy: a follow-up firing on real data is still unobserved.
+- `tests/e2e/followup_e2e.py` 18/18: the follow-up engine on the deployed system. A temporary business's deal was made due by moving its due time into the past, then the real worker was invoked. It found the deal through the index, drafted follow-ups without duplicates, sent one on approval (once), marked the lead cold after the maximum, counted a later reply as a recovered lead, raised an urgent task for an unanswered customer, and did nothing while paused.
+- The scheduled worker ran 67 times in 24 hours with no errors. On real customer data it has created nothing yet, because no real enquiry has arrived since the deploy. What remains unobserved is only the natural case: a real enquiry left for a real day.
 - The dashboard was redesigned (sidebar navigation, graphical overview, pipeline board) and checked on desktop and at phone width on a local build with seeded data. It has not been checked on the live site with a real sign-in or on a physical phone.
 
 Still NOT verified, and only you can do it: everything in sections 2 to 4 below.
