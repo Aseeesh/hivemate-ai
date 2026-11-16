@@ -226,12 +226,14 @@ def test_webhook_with_bad_signature_is_401_and_changes_nothing(fake, monkeypatch
 def test_verified_webhook_marks_only_the_matching_business_due(fake, monkeypatch):
     import base64, hashlib, hmac
     monkeypatch.setenv("XERO_WEBHOOK_KEY", "k")
-    runtime._save_conn(PK, {**runtime.conn_key(PK, "xero"), "provider": "xero", "status": "connected", "externalId": "org-1", "nextSyncAt": NOW + 9999})
+    import time
+    later = int(time.time()) + 9999  # relative to the real clock: request_sync() stamps "now", so a fixed date here would expire
+    runtime._save_conn(PK, {**runtime.conn_key(PK, "xero"), "provider": "xero", "status": "connected", "externalId": "org-1", "nextSyncAt": later})
     fake.seed({"PK": PK, "SK": "XMAP#xero", "GSI1PK": "XT#xero#org-1", "GSI1SK": PK})
     body = json.dumps({"events": [{"tenantId": "org-1", "eventCategory": "INVOICE"}, {"tenantId": "unknown-org"}]}).encode()
     sig = base64.b64encode(hmac.new(b"k", body, hashlib.sha256).digest()).decode()
     assert webhooks.webhook("xero", {"x-xero-signature": sig}, body, {})["statusCode"] == 200
-    assert runtime.get_conn(PK, "xero")["nextSyncAt"] <= NOW + 9999 and runtime.get_conn(PK, "xero")["nextSyncAt"] < NOW + 9999
+    assert runtime.get_conn(PK, "xero")["nextSyncAt"] < later  # pulled forward to now
     # Xero's "intent to receive" has an empty events list and must still answer 200
     empty = b'{"events":[]}'
     sig2 = base64.b64encode(hmac.new(b"k", empty, hashlib.sha256).digest()).decode()
